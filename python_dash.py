@@ -77,7 +77,7 @@ def wrap_text(text, max_width=30):
     import textwrap
     return '<br>'.join(textwrap.wrap(text, width=max_width))
 
-def build_interdependence_figures(df):
+def build_interdependence_figures(df, highlight_track=None):
     agents = ["HUMAN*", "TARS", "TARS*", "HUMAN"]
     VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
 
@@ -89,11 +89,35 @@ def build_interdependence_figures(df):
         dots = []
         grey_to_black_arrows = []
         black_to_black_arrows = []
+        most_reliable_track = []
+        dashed_arrows_to_highlight = []
+
+        proc_df = proc_df.reset_index(drop=True)
+        proc_df["task_idx"] = proc_df.index
 
         # Step 1: Add points
         for idx, row in proc_df.iterrows():
-            task_idx = proc_df.index.get_loc(idx)
+            task_idx = row["task_idx"]
             black_points = []
+
+            agent_colors = {
+                "HUMAN*": row["Human*"].strip().lower() if isinstance(row["Human*"], str) else "",
+                "TARS*": row["TARS*"].strip().lower() if isinstance(row["TARS*"], str) else "",
+            }
+
+            # Determine most reliable agent
+            chosen_agent = None
+            if agent_colors["HUMAN*"] == "green":
+                chosen_agent = "HUMAN*"
+            elif agent_colors["TARS*"] == "green":
+                chosen_agent = "TARS*"
+            elif agent_colors["HUMAN*"] == "yellow":
+                chosen_agent = "HUMAN*"
+            elif agent_colors["TARS*"] == "yellow":
+                chosen_agent = "TARS*"
+
+            if chosen_agent:
+                most_reliable_track.append((task_idx, chosen_agent))
 
             for col in ["Human*", "TARS*"]:
                 val = row[col].strip().lower() if isinstance(row[col], str) else ""
@@ -112,21 +136,27 @@ def build_interdependence_figures(df):
                         and "HUMAN*" in black_points
                         and row["Human*"].strip().lower() != "red"
                         and row["TARS"].strip().lower() != "red"):
-                        grey_to_black_arrows.append({
+                        dashed_arrow = {
                             "start_agent": "TARS",
                             "end_agent": "HUMAN*",
                             "task": task_idx
-                        })
+                        }
+                        grey_to_black_arrows.append(dashed_arrow)
+                        if highlight_track == "most_reliable" and (task_idx, "HUMAN*") in most_reliable_track:
+                            dashed_arrows_to_highlight.append(dashed_arrow)
 
                     elif (agent == "HUMAN"
                           and "TARS*" in black_points
                           and row["TARS*"].strip().lower() != "red"
                           and row["Human"].strip().lower() != "red"):
-                        grey_to_black_arrows.append({
+                        dashed_arrow = {
                             "start_agent": "HUMAN",
                             "end_agent": "TARS*",
                             "task": task_idx
-                        })
+                        }
+                        grey_to_black_arrows.append(dashed_arrow)
+                        if highlight_track == "most_reliable" and (task_idx, "TARS*") in most_reliable_track:
+                            dashed_arrows_to_highlight.append(dashed_arrow)
 
         # Step 2: Black-to-black transitions
         for i in range(len(tasks) - 1):
@@ -155,24 +185,40 @@ def build_interdependence_figures(df):
             ))
 
         for arrow in grey_to_black_arrows:
+            is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
             fig.add_shape(
                 type="line",
                 x0=agent_pos[arrow["start_agent"]],
                 y0=arrow["task"],
                 x1=agent_pos[arrow["end_agent"]],
                 y1=arrow["task"],
-                line=dict(color="black", width=2, dash="dot")
+                line=dict(
+                    color="crimson" if is_highlighted else "black",
+                    width=4 if is_highlighted else 2,
+                    dash="dot"
+                )
             )
 
         for arrow in black_to_black_arrows:
+            is_highlighted = False
+            if highlight_track == "human_baseline":
+                is_highlighted = arrow["start_agent"] == "HUMAN*" and arrow["end_agent"] == "HUMAN*"
+            elif highlight_track == "most_reliable":
+                is_highlighted = (arrow["start_task"], arrow["start_agent"]) in most_reliable_track and \
+                                 (arrow["end_task"], arrow["end_agent"]) in most_reliable_track
+
             fig.add_annotation(
                 x=agent_pos[arrow["end_agent"]],
                 y=arrow["end_task"],
                 ax=agent_pos[arrow["start_agent"]],
                 ay=arrow["start_task"],
                 xref="x", yref="y", axref="x", ayref="y",
-                showarrow=True, arrowhead=3, arrowsize=1,
-                arrowwidth=2, opacity=0.9
+                showarrow=True,
+                arrowhead=3,
+                arrowsize=1,
+                arrowwidth=4 if is_highlighted else 2,
+                arrowcolor="crimson" if is_highlighted else "black",
+                opacity=0.9
             )
 
         fig.update_layout(
@@ -200,7 +246,7 @@ def build_interdependence_figures(df):
         figures[procedure] = fig
     return figures
 
-def build_combined_interdependence_figure(df):
+def build_combined_interdependence_figure(df, highlight_track=None):
     agents = ["HUMAN*", "TARS", "TARS*", "HUMAN"]
     VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
     tasks = df["Task"].tolist()
@@ -212,9 +258,32 @@ def build_combined_interdependence_figure(df):
     df = df.reset_index(drop=True)
     df["task_idx"] = df.index  # Unique index across all tasks
 
+    # Track the most reliable agent at each step
+    most_reliable_track = []
+    dashed_arrows_to_highlight = []
+
     for idx, row in df.iterrows():
         task_idx = row["task_idx"]
         black_points = []
+
+        agent_colors = {
+            "HUMAN*": row["Human*"].strip().lower() if isinstance(row["Human*"], str) else "",
+            "TARS*": row["TARS*"].strip().lower() if isinstance(row["TARS*"], str) else "",
+        }
+
+        # Determine most reliable path based on green/yellow preference for HUMAN*
+        chosen_agent = None
+        if agent_colors["HUMAN*"] == "green":
+            chosen_agent = "HUMAN*"
+        elif agent_colors["TARS*"] == "green":
+            chosen_agent = "TARS*"
+        elif agent_colors["HUMAN*"] == "yellow":
+            chosen_agent = "HUMAN*"
+        elif agent_colors["TARS*"] == "yellow":
+            chosen_agent = "TARS*"
+
+        if chosen_agent:
+            most_reliable_track.append((task_idx, chosen_agent))
 
         for col in ["Human*", "TARS*"]:
             val = row[col].strip().lower() if isinstance(row[col], str) else ""
@@ -235,22 +304,29 @@ def build_combined_interdependence_figure(df):
                     and row["Human*"].strip().lower() != "red"
                     and row["TARS"].strip().lower() != "red"
                 ):
-                    grey_to_black_arrows.append({
+                    dashed_arrow = {
                         "start_agent": "TARS",
                         "end_agent": "HUMAN*",
                         "task": task_idx
-                    })
+                    }
+                    grey_to_black_arrows.append(dashed_arrow)
+                    if highlight_track == "most_reliable" and (task_idx, "HUMAN*") in most_reliable_track:
+                        dashed_arrows_to_highlight.append(dashed_arrow)
+
                 elif (
                     agent == "HUMAN"
                     and "TARS*" in black_points
                     and row["TARS*"].strip().lower() != "red"
                     and row["Human"].strip().lower() != "red"
                 ):
-                    grey_to_black_arrows.append({
+                    dashed_arrow = {
                         "start_agent": "HUMAN",
                         "end_agent": "TARS*",
                         "task": task_idx
-                    })
+                    }
+                    grey_to_black_arrows.append(dashed_arrow)
+                    if highlight_track == "most_reliable" and (task_idx, "TARS*") in most_reliable_track:
+                        dashed_arrows_to_highlight.append(dashed_arrow)
 
     for i in range(len(df) - 1):
         current_blacks = [d for d in dots if d["task"] == i and d["agent"] in ["HUMAN*", "TARS*"] and d["color"] != "red"]
@@ -277,24 +353,40 @@ def build_combined_interdependence_figure(df):
         ))
 
     for arrow in grey_to_black_arrows:
+        is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
         fig.add_shape(
             type="line",
             x0=agent_pos[arrow["start_agent"]],
             y0=arrow["task"],
             x1=agent_pos[arrow["end_agent"]],
             y1=arrow["task"],
-            line=dict(color="black", width=2, dash="dot")
+            line=dict(
+                color="crimson" if is_highlighted else "black",
+                width=4 if is_highlighted else 2,
+                dash="dot"
+            )
         )
 
     for arrow in black_to_black_arrows:
+        is_highlighted = False
+        if highlight_track == "human_baseline":
+            is_highlighted = arrow["start_agent"] == "HUMAN*" and arrow["end_agent"] == "HUMAN*"
+        elif highlight_track == "most_reliable":
+            is_highlighted = (arrow["start_task"], arrow["start_agent"]) in most_reliable_track and \
+                             (arrow["end_task"], arrow["end_agent"]) in most_reliable_track
+
         fig.add_annotation(
             x=agent_pos[arrow["end_agent"]],
             y=arrow["end_task"],
             ax=agent_pos[arrow["start_agent"]],
             ay=arrow["start_task"],
             xref="x", yref="y", axref="x", ayref="y",
-            showarrow=True, arrowhead=3, arrowsize=1,
-            arrowwidth=2, opacity=0.9
+            showarrow=True,
+            arrowhead=3,
+            arrowsize=1,
+            arrowwidth=4 if is_highlighted else 2,
+            arrowcolor="crimson" if is_highlighted else "black",
+            opacity=0.9
         )
 
     fig.update_layout(
@@ -356,6 +448,20 @@ app.layout = html.Div([
         )
     ]),
 
+    dcc.RadioItems(
+    id="highlight-selector",
+    options=[
+        {"label": "No highlight", "value": "none"},
+        {"label": "Baseline SPO", "value": "human_baseline"},
+        {"label": "Most reliable path", "value": "most_reliable"}
+    ],
+    value="none",
+    labelStyle={'display': 'inline-block', 'margin-right': '20px'},
+    style={"textAlign": "center", "marginTop": "20px"}
+    ),
+
+
+
     # Graph
     dcc.Graph(id="interdependence-graph"),
 
@@ -374,15 +480,19 @@ app.layout = html.Div([
 @app.callback(
     Output("interdependence-graph", "figure"),
     Input("procedure-dropdown", "value"),
+    Input("highlight-selector", "value"),
     State("responsibility-table", "data")
 )
-def update_graph(procedure, data):
+def update_graph(procedure, highlight_track, data):
     df = pd.DataFrame(data)
     if procedure is None:
         # 👇 Combine all procedures into one graph
-        return build_combined_interdependence_figure(df)
+        return build_combined_interdependence_figure(df, highlight_track)
+    if highlight_track == "none":
+        highlight_track = None
+
     
-    figures = build_interdependence_figures(df)
+    figures = build_interdependence_figures(df, highlight_track)
     return figures.get(procedure, go.Figure())
 
 
