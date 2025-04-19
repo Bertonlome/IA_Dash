@@ -1,0 +1,10 @@
+Procedure,Task,Human*,TARS,TARS*,Human,Observability,Predictability,Directability
+2.4 Minimize impact,Sense strike - env cues,yellow,yellow,red,,O,P,D
+2.4 Minimize impact,Sense strike - instr. cues,yellow,red,red,,,,
+2.4 Minimize impact,Interpret - env cues,green,green,yellow,yellow,,,
+2.4 Minimize impact,test,green,red,red,,,,
+2.4 Minimize impact,Decide Engine shutdown,yellow,yellow,green,,,,
+2.4 Minimize impact,Execute Shutdown procedure,green,red,red,,,,
+2.4 Minimize impact,Execute Shutdown procedure,green,red,red,,,,
+2.4 Minimize impact,Decide E/O climb Procedure,yellow,yellow,green,,,,
+2.4 Minimize impact,Decide E/O climb Procedure,yellow,yellow,orange,orange,,,
