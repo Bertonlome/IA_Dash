@@ -73,31 +73,162 @@ columns=[
     {"name": "Directability", "id": "Directability", "editable": True},
 ]
 
-def build_interdependence_figure(df):
-    agents = ["HUMAN*", "TARS", "TARS*", "HUMAN"]
-    tasks = df["Task"].tolist()
+def wrap_text(text, max_width=30):
+    import textwrap
+    return '<br>'.join(textwrap.wrap(text, width=max_width))
 
+def build_interdependence_figures(df):
+    agents = ["HUMAN*", "TARS", "TARS*", "HUMAN"]
+    VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
+
+    figures = {}
+
+    for procedure, proc_df in df.groupby("Procedure"):
+        tasks = proc_df["Task"].tolist()
+        height = 300 + len(tasks) * 100
+        dots = []
+        grey_to_black_arrows = []
+        black_to_black_arrows = []
+
+        # Step 1: Add points
+        for idx, row in proc_df.iterrows():
+            task_idx = proc_df.index.get_loc(idx)
+            black_points = []
+
+            for col in ["Human*", "TARS*"]:
+                val = row[col].strip().lower() if isinstance(row[col], str) else ""
+                if val in VALID_COLORS:
+                    dots.append({"task": task_idx, "agent": col.upper(), "color": val})
+                    if val != "red":
+                        black_points.append(col.upper())
+
+            for col in ["Human", "TARS"]:
+                val = row[col].strip().lower() if isinstance(row[col], str) else ""
+                if val in VALID_COLORS:
+                    agent = col.upper()
+                    dots.append({"task": task_idx, "agent": agent, "color": val})
+
+                    if (agent == "TARS"
+                        and "HUMAN*" in black_points
+                        and row["Human*"].strip().lower() != "red"
+                        and row["TARS"].strip().lower() != "red"):
+                        grey_to_black_arrows.append({
+                            "start_agent": "TARS",
+                            "end_agent": "HUMAN*",
+                            "task": task_idx
+                        })
+
+                    elif (agent == "HUMAN"
+                          and "TARS*" in black_points
+                          and row["TARS*"].strip().lower() != "red"
+                          and row["Human"].strip().lower() != "red"):
+                        grey_to_black_arrows.append({
+                            "start_agent": "HUMAN",
+                            "end_agent": "TARS*",
+                            "task": task_idx
+                        })
+
+        # Step 2: Black-to-black transitions
+        for i in range(len(tasks) - 1):
+            current_blacks = [d for d in dots if d["task"] == i and d["agent"] in ["HUMAN*", "TARS*"] and d["color"] != "red"]
+            next_blacks = [d for d in dots if d["task"] == i + 1 and d["agent"] in ["HUMAN*", "TARS*"] and d["color"] != "red"]
+            for curr in current_blacks:
+                for nxt in next_blacks:
+                    black_to_black_arrows.append({
+                        "start_task": i,
+                        "start_agent": curr["agent"],
+                        "end_task": i + 1,
+                        "end_agent": nxt["agent"]
+                    })
+
+        # Step 3: Create figure
+        agent_pos = {agent: i for i, agent in enumerate(agents)}
+        fig = go.Figure()
+
+        for dot in dots:
+            fig.add_trace(go.Scatter(
+                x=[agent_pos[dot["agent"]]],
+                y=[dot["task"]],
+                mode="markers",
+                marker=dict(size=20, color=dot["color"]),
+                showlegend=False
+            ))
+
+        for arrow in grey_to_black_arrows:
+            fig.add_shape(
+                type="line",
+                x0=agent_pos[arrow["start_agent"]],
+                y0=arrow["task"],
+                x1=agent_pos[arrow["end_agent"]],
+                y1=arrow["task"],
+                line=dict(color="black", width=2, dash="dot")
+            )
+
+        for arrow in black_to_black_arrows:
+            fig.add_annotation(
+                x=agent_pos[arrow["end_agent"]],
+                y=arrow["end_task"],
+                ax=agent_pos[arrow["start_agent"]],
+                ay=arrow["start_task"],
+                xref="x", yref="y", axref="x", ayref="y",
+                showarrow=True, arrowhead=3, arrowsize=1,
+                arrowwidth=2, opacity=0.9
+            )
+
+        fig.update_layout(
+            title=f"Workflow for {procedure}",
+            xaxis=dict(
+                tickvals=list(agent_pos.values()),
+                ticktext=list(agent_pos.keys()),
+                title="Agent",
+                showgrid=True,
+                gridcolor='lightgrey'
+            ),
+            yaxis=dict(
+                tickvals=list(range(len(tasks))),
+                ticktext=[wrap_text(task) for task in tasks],
+                title="Task",
+                autorange="reversed",
+                showgrid=True,
+                gridcolor='lightgrey'
+            ),
+            height=height,
+            margin=dict(l=200, r=50, t=50, b=50),
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+        )
+        figures[procedure] = fig
+    return figures
+
+def build_combined_interdependence_figure(df):
+    agents = ["HUMAN*", "TARS", "TARS*", "HUMAN"]
+    VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
+    tasks = df["Task"].tolist()
+    height = 600 + len(tasks) * 100
     dots = []
     grey_to_black_arrows = []
     black_to_black_arrows = []
 
-    VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
+    df = df.reset_index(drop=True)
+    df["task_idx"] = df.index  # Unique index across all tasks
 
-    # Step 1: Add points with actual cell colors
     for idx, row in df.iterrows():
+        task_idx = row["task_idx"]
         black_points = []
 
         for col in ["Human*", "TARS*"]:
             val = row[col].strip().lower() if isinstance(row[col], str) else ""
             if val in VALID_COLORS:
-                dots.append({"task": idx, "agent": col.upper(), "color": val})
-                black_points.append(col.upper())
+                dots.append({"task": task_idx, "agent": col.upper(), "color": val})
+                if val != "red":
+                    black_points.append(col.upper())
 
         for col in ["Human", "TARS"]:
             val = row[col].strip().lower() if isinstance(row[col], str) else ""
             if val in VALID_COLORS:
                 agent = col.upper()
-                dots.append({"task": idx, "agent": agent, "color": val})
+                dots.append({"task": task_idx, "agent": agent, "color": val})
+
                 if (
                     agent == "TARS"
                     and "HUMAN*" in black_points
@@ -107,7 +238,7 @@ def build_interdependence_figure(df):
                     grey_to_black_arrows.append({
                         "start_agent": "TARS",
                         "end_agent": "HUMAN*",
-                        "task": idx
+                        "task": task_idx
                     })
                 elif (
                     agent == "HUMAN"
@@ -118,11 +249,10 @@ def build_interdependence_figure(df):
                     grey_to_black_arrows.append({
                         "start_agent": "HUMAN",
                         "end_agent": "TARS*",
-                        "task": idx
+                        "task": task_idx
                     })
 
-    # Step 2: Add black-to-black transitions (same logic)
-    for i in range(len(tasks) - 1):
+    for i in range(len(df) - 1):
         current_blacks = [d for d in dots if d["task"] == i and d["agent"] in ["HUMAN*", "TARS*"] and d["color"] != "red"]
         next_blacks = [d for d in dots if d["task"] == i + 1 and d["agent"] in ["HUMAN*", "TARS*"] and d["color"] != "red"]
         for curr in current_blacks:
@@ -134,7 +264,6 @@ def build_interdependence_figure(df):
                     "end_agent": nxt["agent"]
                 })
 
-    # Step 3: Plot with Plotly
     agent_pos = {agent: i for i, agent in enumerate(agents)}
     fig = go.Figure()
 
@@ -157,7 +286,6 @@ def build_interdependence_figure(df):
             line=dict(color="black", width=2, dash="dot")
         )
 
-
     for arrow in black_to_black_arrows:
         fig.add_annotation(
             x=agent_pos[arrow["end_agent"]],
@@ -170,7 +298,7 @@ def build_interdependence_figure(df):
         )
 
     fig.update_layout(
-        title="",
+        title="Combined Workflow Graph (All Procedures)",
         xaxis=dict(
             tickvals=list(agent_pos.values()),
             ticktext=list(agent_pos.keys()),
@@ -179,17 +307,17 @@ def build_interdependence_figure(df):
             gridcolor='lightgrey'
         ),
         yaxis=dict(
-            tickvals=list(range(len(tasks))),
-            ticktext=tasks,
-            title="Task",
+            tickvals=list(df["task_idx"]),
+            ticktext=[wrap_text(f"{p} | {t}") for p, t in zip(df["Procedure"], df["Task"])],
+            title="Procedure | Task",
             autorange="reversed",
             showgrid=True,
             gridcolor='lightgrey'
         ),
-        height=600,
-        margin=dict(l=200, r=50, t=50, b=50),
+        margin=dict(l=250, r=50, t=50, b=50),
+        height=height,
         plot_bgcolor='white',
-        paper_bgcolor ='white',
+        paper_bgcolor='white',
     )
     return fig
 
@@ -216,33 +344,56 @@ app.layout = html.Div([
     ]),
 
     html.H2("Workflow graph", style={"textAlign": "center"}),
+
+    # Dropdown menu to select procedure
     html.Div([
-    html.Div("Team Alternative 1", style={
-        "width": "50%",
-        "display": "inline-block",
-        "textAlign": "center",
-        "marginTop": "10px",
-        "marginLeft": "150px"
-    }),
-    html.Div("Team Alternative 2", style={
-        "width": "50%",
-        "display": "inline-block",
-        "textAlign": "center",
-        "marginTop": "10px"
-    }),
-    ], style={"display": "flex", "width": "100%"}),
+        dcc.Dropdown(
+            id="procedure-dropdown",
+            options=[{"label": proc, "value": proc} for proc in df["Procedure"].unique()],
+            value=df["Procedure"].unique()[0],
+            clearable=True,
+            style={"width": "50%", "margin": "0 auto"}
+        )
+    ]),
+
+    # Graph
     dcc.Graph(id="interdependence-graph"),
+
+        # Labels
+    html.Div([
+        html.Div("Team Alternative 1", style={
+            "width": "50%", "display": "inline-block", "textAlign": "center", "marginTop": "10px", "marginLeft": "150px"
+        }),
+        html.Div("Team Alternative 2", style={
+            "width": "50%", "display": "inline-block", "textAlign": "center", "marginTop": "10px"
+        }),
+    ], style={"display": "flex", "width": "100%"}),
+
 ], style={"fontFamily": "'Roboto', 'Helvetica', 'Arial', sans-serif"})
+
+@app.callback(
+    Output("interdependence-graph", "figure"),
+    Input("procedure-dropdown", "value"),
+    State("responsibility-table", "data")
+)
+def update_graph(procedure, data):
+    df = pd.DataFrame(data)
+    if procedure is None:
+        # 👇 Combine all procedures into one graph
+        return build_combined_interdependence_figure(df)
+    
+    figures = build_interdependence_figures(df)
+    return figures.get(procedure, go.Figure())
+
 
 @app.callback(
     Output("table-wrapper", "children"),
     Output("save-confirmation", "children"),
-    Output("interdependence-graph", "figure"),
     Input("responsibility-table", "data"),
     Input("save-button", "n_clicks"),
     Input("load-button", "n_clicks"),
     Input("add-row-button", "n_clicks"),
-    Input("copy-down-button", "n_clicks"),  # 👈 Added copy-down input
+    Input("copy-down-button", "n_clicks"),
     State("responsibility-table", "active_cell"),  # 👈 To know which cell is selected
     prevent_initial_call=True
 )
@@ -265,7 +416,6 @@ def handle_table(data, save_clicks, load_clicks, add_row_clicks, copy_clicks, ac
         df = pd.DataFrame(data)
         df.to_csv(DATA_FILE, index=False)
         save_message = f"✅ Table saved to {DATA_FILE}"
-        interdependence_fig = build_interdependence_figure(df)
 
     # Case 2: Load button clicked
     elif triggered == "load-button":
@@ -318,9 +468,7 @@ def handle_table(data, save_clicks, load_clicks, add_row_clicks, copy_clicks, ac
         style_table={'overflowX': 'auto', 'border': '1px solid lightgrey'},
         row_deletable=True,
     )
-    interdependence_fig = build_interdependence_figure(df)
-
-    return updated_table, save_message, interdependence_fig
+    return updated_table, save_message
 
 
 if __name__ == "__main__":
