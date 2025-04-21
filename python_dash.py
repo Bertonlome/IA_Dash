@@ -582,4 +582,4 @@ def handle_table(data, save_clicks, load_clicks, add_row_clicks, copy_clicks, ac
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=8050, debug=False)
