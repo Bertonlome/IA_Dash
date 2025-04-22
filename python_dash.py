@@ -29,6 +29,7 @@ def style_table(df):
                 'textAlign': 'center'
             })
     return styles
+df = df.assign(Row=lambda x: x.index + 1)
 editable_columns = ["Human*", "TARS", "TARS*", "Human"]
 table = dash_table.DataTable(
     id='responsibility-table',
@@ -36,7 +37,7 @@ table = dash_table.DataTable(
         {"name": col, "id": col, "editable": col in editable_columns}
         for col in df.columns
     ],
-    data=df.to_dict('records'),
+    data=df.assign(Row=lambda x: x.index + 1).to_dict("records"),
     editable=True,
     row_deletable=True,
     dropdown=dropdowns,
@@ -62,6 +63,7 @@ table = dash_table.DataTable(
 )
 
 columns=[
+    {"name": "Row", "id": "Row", "editable": False},
     {"name": "Procedure", "id": "Procedure", "editable": True},
     {"name": "Task", "id": "Task", "editable": True},
     {"name": "Human*", "id": "Human*", "editable": True, "presentation": "dropdown"},
@@ -75,7 +77,10 @@ columns=[
 
 def wrap_text(text, max_width=30):
     import textwrap
+    if not isinstance(text, str):
+        return ""
     return '<br>'.join(textwrap.wrap(text, width=max_width))
+
 
 def build_interdependence_figures(df, highlight_track=None):
     agents = ["HUMAN*", "TARS", "TARS*", "HUMAN"]
@@ -176,13 +181,26 @@ def build_interdependence_figures(df, highlight_track=None):
         fig = go.Figure()
 
         for dot in dots:
+            row = proc_df.iloc[dot["task"]]  # get the row by task index
+            hover_text = (
+                f"<b>Task:</b> {wrap_text(row['Task'])}<br>"
+                f"<b>Agent:</b> {dot['agent']}<br><br>"
+                f"<b>Observability:</b><br>{wrap_text(row.get('Observability', ''))}<br><br>"
+                f"<b>Predictability:</b><br>{wrap_text(row.get('Predictability', ''))}<br><br>"
+                f"<b>Directability:</b><br>{wrap_text(row.get('Directability', ''))}"
+            )
+
+
             fig.add_trace(go.Scatter(
                 x=[agent_pos[dot["agent"]]],
                 y=[dot["task"]],
                 mode="markers",
                 marker=dict(size=20, color=dot["color"]),
-                showlegend=False
+                showlegend=False,
+                hoverinfo="text",
+                hovertext=hover_text
             ))
+
 
         for arrow in grey_to_black_arrows:
             is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
@@ -344,13 +362,26 @@ def build_combined_interdependence_figure(df, highlight_track=None):
     fig = go.Figure()
 
     for dot in dots:
+        row = df.iloc[dot["task"]]
+        hover_text = (
+            f"<b>Task:</b> {wrap_text(row['Task'])}<br>"
+            f"<b>Agent:</b> {dot['agent']}<br><br>"
+            f"<b>Observability:</b><br>{wrap_text(row.get('Observability', ''))}<br><br>"
+            f"<b>Predictability:</b><br>{wrap_text(row.get('Predictability', ''))}<br><br>"
+            f"<b>Directability:</b><br>{wrap_text(row.get('Directability', ''))}"
+        )
+
+
         fig.add_trace(go.Scatter(
             x=[agent_pos[dot["agent"]]],
             y=[dot["task"]],
             mode="markers",
             marker=dict(size=20, color=dot["color"]),
-            showlegend=False
+            showlegend=False,
+            hoverinfo="text",
+            hovertext=hover_text
         ))
+
 
     for arrow in grey_to_black_arrows:
         is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
@@ -429,7 +460,7 @@ app.layout = html.Div([
 
             # Right-aligned Save button
             html.Div([
-                html.Button("💾 Save Table", id="save-button", n_clicks=0)
+                html.Button("💾 Save Table", disabled=False, id="save-button", n_clicks=0)
             ], style={"marginLeft": "auto"})  # pushes this div to the right
         ], style={"display": "flex", "width": "100%"}),
         html.Div(id="save-confirmation", style={"marginTop": "10px", "fontStyle": "italic"})
@@ -463,7 +494,9 @@ app.layout = html.Div([
 
 
     # Graph
-    dcc.Graph(id="interdependence-graph"),
+    dcc.Graph(id="interdependence-graph", config={
+        "displayModeBar": False
+    }),
 
         # Labels
     html.Div([
@@ -555,7 +588,7 @@ def handle_table(data, save_clicks, load_clicks, add_row_clicks, copy_clicks, ac
     updated_table = dash_table.DataTable(
         id='responsibility-table',
         columns=columns,
-        data=df.to_dict('records'),
+        data=df.assign(Row=lambda x: x.index + 1).to_dict("records"),
         editable=True,
         dropdown=dropdowns,
         style_data_conditional=style_table(df),
