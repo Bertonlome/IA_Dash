@@ -3,6 +3,8 @@ from dash import html, dcc, dash_table, Input, Output, State, callback_context
 import plotly.graph_objects as go
 import pandas as pd
 import os
+import base64
+import io
 
 app = dash.Dash(__name__)
 DATA_FILE = "table_data_with_opd.csv"
@@ -453,7 +455,15 @@ app.layout = html.Div([
         html.Div([
             # Left-aligned buttons
             html.Div([
-                html.Button("📂 Load Table", id="load-button", n_clicks=0),
+                dcc.Upload(
+                    id='upload-data',
+                    children=html.Button('📂 Load Table', id='load-button', n_clicks=0),
+                    multiple=False,
+                    style={
+                        'display': 'inline-block',
+                        'marginRight': '10px'
+                    }
+                ),
                 html.Button("➕ Add Row", id="add-row-button", n_clicks=0),
                 html.Button("⬇️ Copy Cell Down", id="copy-down-button", n_clicks=0),
             ], style={"display": "flex", "gap": "10px"}),
@@ -534,13 +544,14 @@ def update_graph(procedure, highlight_track, data):
     Output("save-confirmation", "children"),
     Input("responsibility-table", "data"),
     Input("save-button", "n_clicks"),
-    Input("load-button", "n_clicks"),
+    Input("upload-data", "contents"),
     Input("add-row-button", "n_clicks"),
     Input("copy-down-button", "n_clicks"),
-    State("responsibility-table", "active_cell"),  # 👈 To know which cell is selected
+    State("responsibility-table", "active_cell"),
+    State("upload-data", "filename"),
     prevent_initial_call=True
 )
-def handle_table(data, save_clicks, load_clicks, add_row_clicks, copy_clicks, active_cell):
+def handle_table(data, save_clicks, upload_contents, add_row_clicks, copy_clicks, active_cell, upload_filename):
     ctx = callback_context
     triggered = ctx.triggered[0]["prop_id"].split(".")[0]
 
@@ -560,11 +571,15 @@ def handle_table(data, save_clicks, load_clicks, add_row_clicks, copy_clicks, ac
         df.to_csv(DATA_FILE, index=False)
         save_message = f"✅ Table saved to {DATA_FILE}"
 
-    # Case 2: Load button clicked
-    elif triggered == "load-button":
-        if not os.path.exists(DATA_FILE):
-            return dash.no_update, "⚠️ File not found."
-        df = pd.read_csv(DATA_FILE)
+    # Case 2: File uploaded
+    elif triggered == "upload-data" and upload_contents is not None:
+        content_type, content_string = upload_contents.split(',')
+        decoded = base64.b64decode(content_string)
+        try:
+            df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
+            save_message = f"✅ Loaded {upload_filename}"
+        except Exception as e:
+            return dash.no_update, f"⚠️ Error loading file: {str(e)}"
 
     # Case 3: Add Row button clicked
     elif triggered == "add-row-button":
@@ -593,19 +608,19 @@ def handle_table(data, save_clicks, load_clicks, add_row_clicks, copy_clicks, ac
         dropdown=dropdowns,
         style_data_conditional=style_table(df),
         style_cell={'textAlign': 'left', 'padding': '5px', 'whiteSpace': 'normal'},
-            style_cell_conditional=[
-        {
-            'if': {'column_id': 'Human*'},
-            'borderLeft': '3px solid black'
-        },
-        {
-            'if': {'column_id': 'Human'},
-            'borderRight': '3px solid black'
-        },
-        {
-            'if': {'column_id': 'TARS'},
-            'borderRight': '2px solid black'
-        }
+        style_cell_conditional=[
+            {
+                'if': {'column_id': 'Human*'},
+                'borderLeft': '3px solid black'
+            },
+            {
+                'if': {'column_id': 'Human'},
+                'borderRight': '3px solid black'
+            },
+            {
+                'if': {'column_id': 'TARS'},
+                'borderRight': '2px solid black'
+            }
         ],
         style_header={'fontWeight': 'bold', 'backgroundColor': '#f0f0f0'},
         style_table={'overflowX': 'auto', 'border': '1px solid lightgrey'},
