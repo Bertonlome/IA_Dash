@@ -1,0 +1,2 @@
+task.id,task.name,task.criticality,task.execution_type,task.novelty,task.time_constraint.type,task.time_constraint.s,task.temporal_demand,performer.id,performer.kind,performer.reliability,performer.efficiency_time_required_s,supporter.id,supporter.kind,supporter.capacity,info.requirements,memory.requirements,team.observability,team.predictability,team.directability,tags,notes
+1,check_winds,0.5,one_off,0.0,soft,60.0,1.0,1,human,0.95,60.0,2,tars,1.0,wind_speed#visual|wind_dir#visual|wind_gust#visual,,wind_data:wind_data#visual,,,,
