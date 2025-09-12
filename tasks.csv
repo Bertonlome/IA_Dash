@@ -1,0 +1,3 @@
+task.procedure,task.name,task.criticality,task.execution_type,task.time_constraint.type,task.time_constraint.s,task.temporal_demand,performer.kind,performer.reliability,performer.efficiency_time_required_s,performer.familiarity,supporter.kind,supporter.capacity,info.requirements,memory.requirements,team.observability,team.predictability,team.directability,tags,notes
+takeoff,test,0.5,one_off,none,,,human,red,60.0,0.0,,,,,,,,,
+,my new task,0.5,one_off,none,,,tars,ReliabilityLevel.RED,60.0,0.0,,,,,,,,,
