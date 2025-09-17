@@ -501,14 +501,18 @@ app.layout = html.Div([
     style={"textAlign": "center", "marginTop": "20px"}
     ),
 
-
-
     # Graph
     dcc.Graph(id="interdependence-graph", config={
         "displayModeBar": False
     }),
 
-        # Labels
+    # Bar chart for most reliable path color counts
+    html.Div([
+        html.H3("Most Reliable Path Capacity Distribution", style={"textAlign": "center", "marginTop": "30px"}),
+        dcc.Graph(id="most-reliable-bar-chart")
+    ]),
+
+    # Labels
     html.Div([
         html.Div("Team Alternative 1", style={
             "width": "50%", "display": "inline-block", "textAlign": "center", "marginTop": "10px", "marginLeft": "150px"
@@ -522,21 +526,76 @@ app.layout = html.Div([
 
 @app.callback(
     Output("interdependence-graph", "figure"),
+    Output("most-reliable-bar-chart", "figure"),
     Input("procedure-dropdown", "value"),
     Input("highlight-selector", "value"),
     State("responsibility-table", "data")
 )
-def update_graph(procedure, highlight_track, data):
+def update_graph_and_bar(procedure, highlight_track, data):
     df = pd.DataFrame(data)
+    # --- Workflow Graph ---
     if procedure is None:
-        # 👇 Combine all procedures into one graph
-        return build_combined_interdependence_figure(df, highlight_track)
-    if highlight_track == "none":
-        highlight_track = None
+        workflow_fig = build_combined_interdependence_figure(df, highlight_track)
+    else:
+        if highlight_track == "none":
+            highlight_track_val = None
+        else:
+            highlight_track_val = highlight_track
+        figures = build_interdependence_figures(df, highlight_track_val)
+        workflow_fig = figures.get(procedure, go.Figure())
 
-    
-    figures = build_interdependence_figures(df, highlight_track)
-    return figures.get(procedure, go.Figure())
+    # --- Bar Chart for Most Reliable Path ---
+    color_order = ["red", "yellow", "orange", "green"]
+    color_labels = {"red": "Red", "yellow": "Yellow", "orange": "Orange", "green": "Green"}
+    color_counts = {c: 0 for c in color_order}
+
+    if highlight_track == "most_reliable":
+        # Find the most reliable agent for each task
+        for idx, row in df.iterrows():
+            agent_colors = {
+                "HUMAN*": str(row.get("Human*", "") or "").strip().lower(),
+                "TARS*": str(row.get("TARS*", "") or "").strip().lower(),
+            }
+            chosen = None
+            for agent in ["HUMAN*", "TARS*"]:
+                if agent_colors[agent] == "green":
+                    chosen = agent_colors[agent]
+                    break
+            if not chosen:
+                for agent in ["HUMAN*", "TARS*"]:
+                    if agent_colors[agent] == "yellow":
+                        chosen = agent_colors[agent]
+                        break
+            if not chosen:
+                for agent in ["HUMAN*", "TARS*"]:
+                    if agent_colors[agent] == "orange":
+                        chosen = agent_colors[agent]
+                        break
+            if not chosen:
+                for agent in ["HUMAN*", "TARS*"]:
+                    if agent_colors[agent] == "red":
+                        chosen = agent_colors[agent]
+                        break
+            if chosen in color_counts:
+                color_counts[chosen] += 1
+
+    bar_fig = go.Figure()
+    bar_fig.add_trace(go.Bar(
+        x=[color_labels[c] for c in color_order],
+        y=[color_counts[c] for c in color_order],
+        marker_color=color_order
+    ))
+    bar_fig.update_layout(
+        title="Most Reliable Path Capacity Colors",
+        xaxis_title="Capacity Color",
+        yaxis_title="Number of Tasks",
+        bargap=0.3,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False
+    )
+
+    return workflow_fig, bar_fig
 
 
 @app.callback(
