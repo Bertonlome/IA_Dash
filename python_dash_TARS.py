@@ -506,12 +506,6 @@ app.layout = html.Div([
         "displayModeBar": False
     }),
 
-    # Bar chart for most reliable path color counts
-    html.Div([
-        html.H3("Most Reliable Path Capacity Distribution", style={"textAlign": "center", "marginTop": "30px"}),
-        dcc.Graph(id="most-reliable-bar-chart")
-    ]),
-
     # Labels
     html.Div([
         html.Div("Team Alternative 1", style={
@@ -522,11 +516,21 @@ app.layout = html.Div([
         }),
     ], style={"display": "flex", "width": "100%"}),
 
+    # Bar chart for most reliable path color counts
+    html.Div([
+        dcc.Graph(id="bar-chart-whole-scenario"),
+        dcc.Graph(id="most-reliable-bar-chart"),
+        dcc.Graph(id="spo_baseline-bar-chart")
+    ]),
+
+
 ], style={"fontFamily": "'Roboto', 'Helvetica', 'Arial', sans-serif"})
 
 @app.callback(
     Output("interdependence-graph", "figure"),
+    Output("bar-chart-whole-scenario", "figure"),
     Output("most-reliable-bar-chart", "figure"),
+    Output("spo_baseline-bar-chart", "figure"),
     Input("procedure-dropdown", "value"),
     Input("highlight-selector", "value"),
     State("responsibility-table", "data")
@@ -536,6 +540,7 @@ def update_graph_and_bar(procedure, highlight_track, data):
     # --- Workflow Graph ---
     if procedure is None:
         workflow_fig = build_combined_interdependence_figure(df, highlight_track)
+        df_bar = df
     else:
         if highlight_track == "none":
             highlight_track_val = None
@@ -543,59 +548,290 @@ def update_graph_and_bar(procedure, highlight_track, data):
             highlight_track_val = highlight_track
         figures = build_interdependence_figures(df, highlight_track_val)
         workflow_fig = figures.get(procedure, go.Figure())
+        df_bar = df[df["Procedure"] == procedure]
 
-    # --- Bar Chart for Most Reliable Path ---
-    color_order = ["red", "yellow", "orange", "green"]
-    color_labels = {"red": "Red", "yellow": "Yellow", "orange": "Orange", "green": "Green"}
-    color_counts = {c: 0 for c in color_order}
+# --- Bar Chart for the whole scenario---
+    performer_green = 0
+    performer_yellow = 0
+    performer_orange = 0
+    supporter_green = 0
+    supporter_yellow = 0
+    supporter_orange = 0
+    human_performer_green = 0
+    human_performer_yellow = 0
+    human_performer_orange = 0
+    human_supporter_green = 0
+    human_supporter_yellow = 0
+    human_supporter_orange = 0
+    tars_performer_green = 0
+    tars_performer_yellow = 0
+    tars_performer_orange = 0
+    tars_supporter_green = 0
+    tars_supporter_yellow = 0
+    tars_supporter_orange = 0
+    for idx, row in df_bar.iterrows():
+        agent_colors = {
+            "HUMAN*": str(row.get("Human*", "") or "").strip().lower(),
+            "TARS*": str(row.get("TARS*", "") or "").strip().lower(),
+        }
+        supporter_colors = {
+            "HUMAN": str(row.get("Human", "") or "").strip().lower(),
+            "TARS": str(row.get("TARS", "") or "").strip().lower(),
+        }
+        # Find performer (most reliable)
+        for agent in ["HUMAN*", "TARS*"]:
+            if agent_colors[agent] == "green":
+                if agent ==  "HUMAN*":
+                    human_performer_green += 1
+                if agent == "TARS*":
+                    tars_performer_green += 1
+                performer_green += 1
+            if agent_colors[agent] == "yellow":
+                if agent ==  "HUMAN*":
+                    human_performer_yellow += 1
+                if agent == "TARS*":
+                    tars_performer_yellow += 1
+                performer_yellow += 1
+            if agent_colors[agent] == "orange":
+                if agent ==  "HUMAN*":
+                    human_performer_orange += 1
+                if agent == "TARS*":
+                    tars_performer_orange += 1
+                performer_orange += 1
+        for agent in ["HUMAN", "TARS"]:
+            if supporter_colors[agent] == "green":
+                if agent ==  "HUMAN":
+                    human_supporter_green += 1
+                if agent == "TARS":
+                    tars_supporter_green += 1
+                supporter_green += 1
+            if supporter_colors[agent] == "yellow":
+                if agent ==  "HUMAN":
+                    human_supporter_yellow += 1
+                if agent == "TARS":
+                    tars_supporter_yellow += 1
+                supporter_yellow += 1
+            if supporter_colors[agent] == "orange":
+                if agent ==  "HUMAN":
+                    human_supporter_orange += 1
+                if agent == "TARS":
+                    tars_supporter_orange += 1
+                supporter_orange += 1
 
-    if highlight_track == "most_reliable":
-        # Find the most reliable agent for each task
-        for idx, row in df.iterrows():
-            agent_colors = {
-                "HUMAN*": str(row.get("Human*", "") or "").strip().lower(),
-                "TARS*": str(row.get("TARS*", "") or "").strip().lower(),
-            }
-            chosen = None
-            for agent in ["HUMAN*", "TARS*"]:
-                if agent_colors[agent] == "green":
-                    chosen = agent_colors[agent]
-                    break
-            if not chosen:
-                for agent in ["HUMAN*", "TARS*"]:
-                    if agent_colors[agent] == "yellow":
-                        chosen = agent_colors[agent]
-                        break
-            if not chosen:
-                for agent in ["HUMAN*", "TARS*"]:
-                    if agent_colors[agent] == "orange":
-                        chosen = agent_colors[agent]
-                        break
-            if not chosen:
-                for agent in ["HUMAN*", "TARS*"]:
-                    if agent_colors[agent] == "red":
-                        chosen = agent_colors[agent]
-                        break
-            if chosen in color_counts:
-                color_counts[chosen] += 1
-
-    bar_fig = go.Figure()
-    bar_fig.add_trace(go.Bar(
-        x=[color_labels[c] for c in color_order],
-        y=[color_counts[c] for c in color_order],
-        marker_color=color_order
+    bar_fig_whole_scenario = go.Figure()
+    # Stacked bars for performer colors
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="Human Performer",
+        x=["Performer Green", "Performer Yellow", "Performer Orange"],
+        y=[human_performer_green, human_performer_yellow, human_performer_orange],
+        marker_color=["seagreen", "gold", "darkorange"]
     ))
-    bar_fig.update_layout(
-        title="Most Reliable Path Capacity Colors",
-        xaxis_title="Capacity Color",
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="TARS Performer",
+        x=["Performer Green", "Performer Yellow", "Performer Orange"],
+        y=[tars_performer_green, tars_performer_yellow, tars_performer_orange],
+        marker_color=["limegreen", "khaki", "orange"]
+    ))
+    # Stacked bars for supporter colors
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="Human Supporter",
+        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
+        y=[human_supporter_green, human_supporter_yellow, human_supporter_orange],
+        marker_color=["seagreen", "gold", "darkorange"]
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="TARS Supporter",
+        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
+        y=[tars_supporter_green, tars_supporter_yellow, tars_supporter_orange],
+        marker_color=["limegreen", "khaki", "orange"]
+    ))
+    bar_fig_whole_scenario.update_layout(
+        title="Performer and Supporter Capacities in Mixed Initiative",
+        xaxis_title="Role and Capacity",
         yaxis_title="Number of Tasks",
+        barmode='stack',
         bargap=0.3,
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False
     )
 
-    return workflow_fig, bar_fig
+    # --- Bar Chart for Most Reliable Path ---
+    performer_green = 0
+    performer_yellow = 0
+    performer_orange = 0
+    supporter_green = 0
+    supporter_yellow = 0
+    supporter_orange = 0
+    human_performer_green = 0
+    human_performer_yellow = 0
+    human_performer_orange = 0
+    human_supporter_green = 0
+    human_supporter_yellow = 0
+    human_supporter_orange = 0
+    tars_performer_green = 0
+    tars_performer_yellow = 0
+    tars_performer_orange = 0
+    tars_supporter_green = 0
+    tars_supporter_yellow = 0
+    tars_supporter_orange = 0
+    for idx, row in df_bar.iterrows():
+        agent_colors = {
+            "HUMAN*": str(row.get("Human*", "") or "").strip().lower(),
+            "TARS*": str(row.get("TARS*", "") or "").strip().lower(),
+        }
+        supporter_colors = {
+            "HUMAN": str(row.get("Human", "") or "").strip().lower(),
+            "TARS": str(row.get("TARS", "") or "").strip().lower(),
+        }
+        # Find performer (most reliable)
+        performer = None
+        for agent in ["HUMAN*", "TARS*"]:
+            if agent_colors[agent] == "green":
+                performer = agent
+                performer_color = "green"
+                break
+        if not performer:
+            for agent in ["HUMAN*", "TARS*"]:
+                if agent_colors[agent] == "yellow":
+                    performer = agent
+                    performer_color = "yellow"
+                    break
+        if not performer:
+            for agent in ["HUMAN*", "TARS*"]:
+                if agent_colors[agent] == "orange":
+                    performer = agent
+                    performer_color = "orange"
+                    break
+        # Count performer color
+        if performer:
+            if performer_color == "green":
+                performer_green += 1
+                if performer == "HUMAN*":
+                    human_performer_green += 1
+                else:
+                    tars_performer_green += 1
+            elif performer_color == "yellow":
+                performer_yellow += 1
+                if performer == "HUMAN*":
+                    human_performer_yellow += 1
+                else:
+                    tars_performer_yellow += 1
+            elif performer_color == "orange":
+                performer_orange += 1
+                if performer == "HUMAN*":
+                    human_performer_orange += 1
+                else:
+                    tars_performer_orange += 1
+            # Now check for supporter (the other agent)
+            supporter = "TARS" if performer == "HUMAN*" else "HUMAN"
+            supporter_color = supporter_colors[supporter]
+            if supporter_color == "green":
+                supporter_green += 1
+                if supporter == "HUMAN":
+                    human_supporter_green += 1
+                else:
+                    tars_supporter_green += 1
+            elif supporter_color == "yellow":
+                supporter_yellow += 1
+                if supporter == "HUMAN":
+                    human_supporter_yellow += 1
+                else:
+                    tars_supporter_yellow += 1
+            elif supporter_color == "orange":
+                supporter_orange += 1
+                if supporter == "HUMAN":
+                    human_supporter_orange += 1
+                else:
+                    tars_supporter_orange += 1
+
+    bar_fig = go.Figure()
+    # Stacked bars for performer colors
+    bar_fig.add_trace(go.Bar(
+        name="Human Performer",
+        x=["Performer Green", "Performer Yellow", "Performer Orange"],
+        y=[human_performer_green, human_performer_yellow, human_performer_orange],
+        marker_color=["seagreen", "gold", "darkorange"]
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="TARS Performer",
+        x=["Performer Green", "Performer Yellow", "Performer Orange"],
+        y=[tars_performer_green, tars_performer_yellow, tars_performer_orange],
+        marker_color=["limegreen", "khaki", "orange"]
+    ))
+    # Stacked bars for supporter colors
+    bar_fig.add_trace(go.Bar(
+        name="Human Supporter",
+        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
+        y=[human_supporter_green, human_supporter_yellow, human_supporter_orange],
+        marker_color=["seagreen", "gold", "darkorange"]
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="TARS Supporter",
+        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
+        y=[tars_supporter_green, tars_supporter_yellow, tars_supporter_orange],
+        marker_color=["limegreen", "khaki", "orange"]
+    ))
+    bar_fig.update_layout(
+        title="Most Reliable Path: Performer and Supporter Capacities",
+        xaxis_title="Role and Capacity",
+        yaxis_title="Number of Tasks",
+        barmode='stack',
+        bargap=0.3,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False
+    )
+
+    # --- Bar Chart for spo baseline Path ---
+    performer_green = 0
+    performer_yellow = 0
+    performer_orange = 0
+    for idx, row in df_bar.iterrows():
+        agent_colors = {
+            "HUMAN*": str(row.get("Human*", "") or "").strip().lower(),
+        }
+        performer = "HUMAN*"
+        if performer:
+            if agent_colors[performer] == "green":
+                performer_green += 1
+            elif agent_colors[performer] == "yellow":
+                performer_yellow += 1
+            elif agent_colors[performer] == "orange":
+                performer_orange += 1
+            elif agent_colors[performer] == "orange":
+                performer_orange += 1
+
+    bar_fig_spo = go.Figure()
+    # Stacked bars for performer colors
+    bar_fig_spo.add_trace(go.Bar(
+        name="Performer Green",
+        x=["Performer Green"],
+        y=[performer_green],
+        marker_color="seagreen"
+    ))
+    bar_fig_spo.add_trace(go.Bar(
+        name="Performer Yellow",
+        x=["Performer Yellow"],
+        y=[performer_yellow],
+        marker_color="gold"
+    ))
+    bar_fig_spo.add_trace(go.Bar(
+        name="Performer Orange",
+        x=["Performer Orange"],
+        y=[performer_orange],
+        marker_color="darkorange"
+    ))
+    bar_fig_spo.update_layout(
+        title="SPO Baseline Path: Human pilot capacities",
+        xaxis_title="Role and Capacity",
+        yaxis_title="Number of Tasks",
+        bargap=0.3,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False
+    )
+    return workflow_fig, bar_fig_whole_scenario, bar_fig, bar_fig_spo
 
 
 @app.callback(

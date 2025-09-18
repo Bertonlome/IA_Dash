@@ -662,13 +662,6 @@ app.layout = html.Div([
     dcc.Graph(id="interdependence-graph", config={
         "displayModeBar": False
     }),
-
-    # Bar chart for most reliable path color counts
-    html.Div([
-        html.H3("Most Reliable Path Capacity Distribution", style={"textAlign": "center", "marginTop": "30px"}),
-        dcc.Graph(id="most-reliable-bar-chart")
-    ]),
-
     # Labels
     html.Div([
         html.Div("Team Alternative 1", style={
@@ -679,10 +672,18 @@ app.layout = html.Div([
         }),
     ], style={"display": "flex", "width": "100%"}),
 
+    # Bar chart for most reliable path color counts
+    html.Div([
+        dcc.Graph(id="overall-scenario-bar-chart"),
+        dcc.Graph(id="most-reliable-bar-chart")
+    ]),
+
+
 ], style={"fontFamily": "'Roboto', 'Helvetica', 'Arial', sans-serif"})
 
 @app.callback(
     Output("interdependence-graph", "figure"),
+    Output("overall-scenario-bar-chart", "figure"),
     Output("most-reliable-bar-chart", "figure"),
     Input("procedure-dropdown", "value"),
     Input("highlight-selector", "value"),
@@ -698,64 +699,376 @@ def update_graph_and_bar(procedure, highlight_track, data):
     # --- Workflow Graph ---
     if procedure is None:
         workflow_fig = build_combined_interdependence_figure(df, highlight_track)
+        df_bar = df
     else:
         figures = build_interdependence_figures(df, highlight_track)
         workflow_fig = figures.get(procedure, go.Figure())
+        df_bar = df[df["Procedure"] == procedure]
 
-    # --- Bar Chart for Most Reliable Path ---
-    # Only show for 'most_reliable' highlight
-    color_order = ["red", "yellow", "orange", "green"]
-    color_labels = {"red": "Red", "yellow": "Yellow", "orange": "Orange", "green": "Green"}
-    color_counts = {c: 0 for c in color_order}
+# --- Bar Chart for the whole scenario---
+    performer_green = 0
+    performer_yellow = 0
+    performer_orange = 0
+    supporter_green = 0
+    supporter_yellow = 0
+    supporter_orange = 0
+    human_performer_green = 0
+    human_performer_yellow = 0
+    human_performer_orange = 0
+    human_supporter_green = 0
+    human_supporter_yellow = 0
+    human_supporter_orange = 0
+    ugv_performer_green = 0
+    ugv_performer_yellow = 0
+    ugv_performer_orange = 0
+    ugv_supporter_green = 0
+    ugv_supporter_yellow = 0
+    ugv_supporter_orange = 0
+    uav_performer_green = 0
+    uav_performer_yellow = 0
+    uav_performer_orange = 0
+    uav_supporter_green = 0
+    uav_supporter_yellow = 0
+    uav_supporter_orange = 0
 
-    if highlight_track == "most_reliable":
-        # Find the most reliable agent for each task
-        for idx, row in df.iterrows():
-            agent_colors = {
-                "Human*": str(row.get("Human*", "") or "").strip().lower(),
-                "UGV*": str(row.get("UGV*", "") or "").strip().lower(),
-                "UAV*": str(row.get("UAV*", "") or "").strip().lower(),
-            }
-            chosen = None
-            for agent in ["Human*", "UGV*", "UAV*"]:
-                if agent_colors[agent] == "green":
-                    chosen = agent_colors[agent]
-                    break
-            if not chosen:
-                for agent in ["Human*", "UGV*", "UAV*"]:
-                    if agent_colors[agent] == "yellow":
-                        chosen = agent_colors[agent]
-                        break
-            if not chosen:
-                for agent in ["Human*", "UGV*", "UAV*"]:
-                    if agent_colors[agent] == "orange":
-                        chosen = agent_colors[agent]
-                        break
-            if not chosen:
-                for agent in ["Human*", "UGV*", "UAV*"]:
-                    if agent_colors[agent] == "red":
-                        chosen = agent_colors[agent]
-                        break
-            if chosen in color_counts:
-                color_counts[chosen] += 1
+    for idx, row in df_bar.iterrows():
+        agent_colors = {
+            "HUMAN*": str(row.get("Human*", "") or "").strip().lower(),
+            "UGV*": str(row.get("UGV*", "") or "").strip().lower(),
+            "UAV*": str(row.get("UAV*", "") or "").strip().lower(),
+        }
+        supporter_colors = {
+            "HUMAN": str(row.get("Human", "") or "").strip().lower(),
+            "UGV": str(row.get("UGV", "") or "").strip().lower(),
+            "UAV": str(row.get("UAV", "") or "").strip().lower(),
+        }
+        # Find performer (most reliable)
+        for agent in ["HUMAN*", "UGV*", "UAV*"]:
+            if agent_colors[agent] == "green":
+                if agent ==  "HUMAN*":
+                    human_performer_green += 1
+                if agent == "UGV*":
+                    ugv_performer_green += 1
+                if agent == "UAV*":
+                    uav_performer_green += 1
+                performer_green += 1
+            if agent_colors[agent] == "yellow":
+                if agent ==  "HUMAN*":
+                    human_performer_yellow += 1
+                if agent == "UGV*":
+                    ugv_performer_yellow += 1
+                if agent == "UAV*":
+                    uav_performer_yellow += 1
+                performer_yellow += 1
+            if agent_colors[agent] == "orange":
+                if agent ==  "HUMAN*":
+                    human_performer_orange += 1
+                if agent == "UGV*":
+                    ugv_performer_orange += 1
+                if agent == "UAV*":
+                    uav_performer_orange += 1
+                performer_orange += 1
+        for agent in ["HUMAN", "UGV", "UAV"]:
+            if supporter_colors[agent] == "green":
+                if agent ==  "HUMAN":
+                    human_supporter_green += 1
+                if agent == "UGV":
+                    ugv_supporter_green += 1
+                if agent == "UAV":
+                    uav_supporter_green += 1
+                supporter_green += 1
+            if supporter_colors[agent] == "yellow":
+                if agent ==  "HUMAN":
+                    human_supporter_yellow += 1
+                if agent == "UGV":
+                    ugv_supporter_yellow += 1
+                if agent == "UAV":
+                    uav_supporter_yellow += 1
+                supporter_yellow += 1
+            if supporter_colors[agent] == "orange":
+                if agent ==  "HUMAN":
+                    human_supporter_orange += 1
+                if agent == "UGV":
+                    ugv_supporter_orange += 1
+                if agent == "UAV":
+                    uav_supporter_orange += 1
+                supporter_orange += 1
 
-    bar_fig = go.Figure()
-    bar_fig.add_trace(go.Bar(
-        x=[color_labels[c] for c in color_order],
-        y=[color_counts[c] for c in color_order],
-        marker_color=color_order
+    bar_fig_whole_scenario = go.Figure()
+    # Stacked bars for performer colors
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="Human Performer",
+        x=["Performer Green", "Performer Yellow", "Performer Orange"],
+        y=[human_performer_green, human_performer_yellow, human_performer_orange],
+        marker_color=["seagreen", "gold", "darkorange"]
     ))
-    bar_fig.update_layout(
-        title="Most Reliable Path Capacity Colors",
-        xaxis_title="Capacity Color",
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UGV Performer",
+        x=["Performer Green", "Performer Yellow", "Performer Orange"],
+        y=[ugv_performer_green, ugv_performer_yellow, ugv_performer_orange],
+        marker_color=["limegreen", "khaki", "orange"]
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UAV Performer",
+        x=["Performer Green", "Performer Yellow", "Performer Orange"],
+        y=[uav_performer_green, uav_performer_yellow, uav_performer_orange],
+        marker_color=["mediumspringgreen", "lemonchiffon", "coral"]
+    ))
+    # Stacked bars for supporter colors
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="Human Supporter",
+        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
+        y=[human_supporter_green, human_supporter_yellow, human_supporter_orange],
+        marker_color=["seagreen", "gold", "darkorange"]
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UGV Supporter",
+        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
+        y=[ugv_supporter_green, ugv_supporter_yellow, ugv_supporter_orange],
+        marker_color=["limegreen", "khaki", "orange"]
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UAV Supporter",
+        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
+        y=[uav_supporter_green, uav_supporter_yellow, uav_supporter_orange],
+        marker_color=["mediumspringgreen", "lemonchiffon", "coral"]
+    ))
+    bar_fig_whole_scenario.update_layout(
+        title="Performer and Supporter Capacities in Mixed Initiative",
+        xaxis_title="Role and Capacity",
         yaxis_title="Number of Tasks",
+        barmode='stack',
         bargap=0.3,
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False
     )
 
-    return workflow_fig, bar_fig
+    # --- Bar Chart for Most Reliable Path ---
+    performer_green = 0
+    performer_yellow = 0
+    performer_orange = 0
+    supporter_green = 0
+    supporter_yellow = 0
+    supporter_orange = 0
+    human_performer_green = 0
+    human_performer_yellow = 0
+    human_performer_orange = 0
+    human_supporter_green = 0
+    human_supporter_yellow = 0
+    human_supporter_orange = 0
+    ugv_performer_green = 0
+    ugv_performer_yellow = 0
+    ugv_performer_orange = 0
+    ugv_supporter_green = 0
+    ugv_supporter_yellow = 0
+    ugv_supporter_orange = 0
+    uav_performer_green = 0
+    uav_performer_yellow = 0
+    uav_performer_orange = 0
+    uav_supporter_green = 0
+    uav_supporter_yellow = 0
+    uav_supporter_orange = 0
+    for idx, row in df_bar.iterrows():
+        agent_colors = {
+            "HUMAN*": str(row.get("Human*", "") or "").strip().lower(),
+            "UGV*": str(row.get("UGV*", "") or "").strip().lower(),
+            "UAV*": str(row.get("UAV*", "") or "").strip().lower(),
+        }
+        supporter_colors = {
+            "HUMAN": str(row.get("Human", "") or "").strip().lower(),
+            "UGV": str(row.get("UGV", "") or "").strip().lower(),
+            "UAV": str(row.get("UAV", "") or "").strip().lower(),
+        }
+        performer = None
+        # Find performer (most reliable)
+        if agent_colors["HUMAN*"] == "green":
+            performer = "HUMAN*"
+            performer_green += 1
+            human_performer_green += 1
+        elif agent_colors["UGV*"] == "green":
+            performer = "UGV*"
+            performer_green += 1
+            ugv_performer_green += 1
+            if agent_colors["UAV*"] == "green":
+                performer += ";UAV*"
+                performer_green += 1
+                uav_performer_green += 1
+        elif agent_colors["UAV*"] == "green":
+            performer = "UAV*"
+            performer_green += 1
+            uav_performer_green += 1
+        elif agent_colors["HUMAN*"] == "yellow":
+            performer = "HUMAN*"
+            performer_yellow += 1
+            human_performer_yellow += 1
+        elif agent_colors["UGV*"] == "yellow":
+            performer = "UGV*"
+            performer_yellow += 1
+            ugv_performer_yellow += 1
+            if agent_colors["UAV*"] == "yellow":
+                performer += ";UAV*"
+                performer_yellow += 1
+                uav_performer_yellow += 1
+        elif agent_colors["UAV*"] == "yellow":
+            performer = "UAV*"
+            performer_yellow += 1
+            uav_performer_yellow += 1
+        elif agent_colors["HUMAN*"] == "orange":
+            performer = "HUMAN*"
+            performer_orange += 1
+            human_performer_orange += 1
+        elif agent_colors["UGV*"] == "orange":
+            performer = "UGV*"
+            performer_orange += 1
+            ugv_performer_orange += 1
+            if agent_colors["UAV*"] == "orange":
+                performer += ";UAV*"
+                performer_orange += 1
+                uav_performer_orange += 1
+        elif agent_colors["UAV*"] == "orange":
+            performer = "UAV*"
+            performer_orange += 1
+            uav_performer_orange += 1
+
+        # Now check for supporter (the other agent)
+        if performer == "HUMAN*":
+            if supporter_colors["UGV"] == "green" or supporter_colors['UGV'] == "yellow" or supporter_colors['UGV'] == "orange":
+                supporter_color = supporter_colors["UGV"]
+                if supporter_color == "green":
+                    supporter_green += 1
+                    ugv_supporter_green += 1
+                elif supporter_color == "yellow":
+                    supporter_yellow += 1
+                    ugv_supporter_yellow += 1
+                elif supporter_color == "orange":
+                    supporter_orange += 1
+                    ugv_supporter_orange += 1
+            if supporter_colors["UAV"] == "green" or supporter_colors['UAV'] == "yellow" or supporter_colors['UAV'] == "orange":
+                supporter_color = supporter_colors["UAV"]
+                if supporter_color == "green":
+                    supporter_green += 1
+                    uav_supporter_green += 1
+                elif supporter_color == "yellow":
+                    supporter_yellow += 1
+                    uav_supporter_yellow += 1
+                elif supporter_color == "orange":
+                    supporter_orange += 1
+                    uav_supporter_orange += 1
+        elif performer == "UGV*" :
+            if supporter_colors["UAV"] == "green" or supporter_colors['UAV'] == "yellow" or supporter_colors['UAV'] == "orange":
+                supporter_color = supporter_colors["UAV"]
+                if supporter_color == "green":
+                    supporter_green += 1
+                    uav_supporter_green += 1
+                elif supporter_color == "yellow":
+                    supporter_yellow += 1
+                    uav_supporter_yellow += 1
+                elif supporter_color == "orange":
+                    supporter_orange += 1
+                    uav_supporter_orange += 1
+                    supporter_yellow += 1
+                elif supporter_color == "orange":
+                    supporter_orange += 1
+                    uav_supporter_orange += 1
+            if supporter_colors["HUMAN"] == "green" or supporter_colors['HUMAN'] == "yellow" or supporter_colors['HUMAN'] == "orange":
+                supporter_color = supporter_colors["HUMAN"]
+                if supporter_color == "green":
+                    supporter_green += 1
+                    human_supporter_green += 1
+                elif supporter_color == "yellow":
+                    supporter_yellow += 1
+                    human_supporter_yellow += 1
+                elif supporter_color == "orange":
+                    supporter_orange += 1
+                    human_supporter_orange += 1
+        elif performer == "UAV*":
+            if supporter_colors["UGV"] == "green" or supporter_colors['UGV'] == "yellow" or supporter_colors['UGV'] == "orange":
+                supporter_color = supporter_colors["UGV"]
+                if supporter_color == "green":
+                    supporter_green += 1
+                    ugv_supporter_green += 1
+                elif supporter_color == "yellow":
+                    supporter_yellow += 1
+                    ugv_supporter_yellow += 1
+                elif supporter_color == "orange":
+                    supporter_orange += 1
+                    ugv_supporter_orange += 1
+            if supporter_colors["HUMAN"] == "green" or supporter_colors['HUMAN'] == "yellow" or supporter_colors['HUMAN'] == "orange":
+                supporter_color = supporter_colors["HUMAN"]
+                if supporter_color == "green":
+                    supporter_green += 1
+                    human_supporter_green += 1
+                elif supporter_color == "yellow":
+                    supporter_yellow += 1
+                    human_supporter_yellow += 1
+                elif supporter_color == "orange":
+                    supporter_orange += 1
+                    human_supporter_orange += 1
+        elif performer == "UGV*;UAV*":
+            if supporter_colors["HUMAN"] == "green" or supporter_colors['HUMAN'] == "yellow" or supporter_colors['HUMAN'] == "orange":
+                supporter_color = supporter_colors["HUMAN"]
+                if supporter_color == "green":
+                    supporter_green += 1
+                    human_supporter_green += 1
+                elif supporter_color == "yellow":
+                    supporter_yellow += 1
+                    human_supporter_yellow += 1
+                elif supporter_color == "orange":
+                    supporter_orange += 1
+                    human_supporter_orange += 1
+
+    bar_fig = go.Figure()
+    # Stacked bars for performer colors
+    bar_fig.add_trace(go.Bar(
+        name="Human Performer",
+        x=["Performer Green", "Performer Yellow", "Performer Orange"],
+        y=[human_performer_green, human_performer_yellow, human_performer_orange],
+        marker_color=["seagreen", "gold", "darkorange"]
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UGV Performer",
+        x=["Performer Green", "Performer Yellow", "Performer Orange"],
+        y=[ugv_performer_green, ugv_performer_yellow, ugv_performer_orange],
+        marker_color=["limegreen", "khaki", "orange"]
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UAV Performer",
+        x=["Performer Green", "Performer Yellow", "Performer Orange"],
+        y=[uav_performer_green, uav_performer_yellow, uav_performer_orange],
+        marker_color=["mediumspringgreen", "lemonchiffon", "coral"]
+    ))
+    # Stacked bars for supporter colors
+    bar_fig.add_trace(go.Bar(
+        name="Human Supporter",
+        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
+        y=[human_supporter_green, human_supporter_yellow, human_supporter_orange],
+        marker_color=["seagreen", "gold", "darkorange"]
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UGV Supporter",
+        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
+        y=[ugv_supporter_green, ugv_supporter_yellow, ugv_supporter_orange],
+        marker_color=["limegreen", "khaki", "orange"]
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UAV Supporter",
+        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
+        y=[uav_supporter_green, uav_supporter_yellow, uav_supporter_orange],
+        marker_color=["mediumspringgreen", "lemonchiffon", "coral"]
+    ))
+    bar_fig.update_layout(
+        title="Most Reliable Path: Performer and Supporter Capacities",
+        xaxis_title="Role and Capacity",
+        yaxis_title="Number of Tasks",
+        barmode='stack',
+        bargap=0.3,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False
+    )
+
+    return workflow_fig, bar_fig_whole_scenario, bar_fig
 
 
 def ensure_all_columns(df, columns):
