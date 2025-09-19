@@ -14,11 +14,19 @@ class ExecutionType(Enum):
     CONTINUOUS = "continuous"
     CYCLIC = "cyclic"
 
-class Modality(Enum):
+class InformationModality(Enum):
     VISUAL = "visual"
     AUDITORY = "auditory"
     HAPTIC = "haptic"
     PROPRIOCEPTIVE = "proprioceptive"
+    OTHER = "other"
+
+class RequirementModality(Enum):
+    VISUAL_SCREEN = "visual_screen"
+    VISUAL_ALERT = "visual_alert"
+    AUDITORY_VOICE = "auditory_voice"
+    AUDITORY_ALERT = "auditory_alert"
+    HAPTIC = "haptic"
     OTHER = "other"
 
 class TimeConstraintType(Enum):
@@ -26,11 +34,15 @@ class TimeConstraintType(Enum):
     SOFT_DEADLINE = "soft" # preferred completion time
     HARD_DEADLINE = "hard" # strict deadline, failure if exceeded
 
-class ReliabilityLevel(Enum):
-    GREEN = "green"    # High reliability
-    YELLOW = "yellow"  # Medium reliability
-    ORANGE = "orange"  # Low reliability
-    RED = "red"        # Very low reliability
+class CapacityLevel(Enum):
+    GREEN = "green"    
+    YELLOW = "yellow"  
+    ORANGE = "orange" 
+    RED = "red"      
+
+class Teammate(Enum):
+    HUMAN = "human"
+    TARS = "TARS"
 
 # ======================
 # Atomic descriptor types
@@ -39,14 +51,15 @@ class ReliabilityLevel(Enum):
 @dataclass
 class InformationItem:
     name: str
-    modality: List[Modality] = field(default_factory=lambda: [Modality.OTHER])
+    modality: List[InformationModality] = field(default_factory=lambda: [InformationModality.OTHER])
     notes: Optional[str] = None
 
 @dataclass
 class TeamingElement:
+    source: str
     target: str
     what: str
-    modality: Optional[List[Modality]] = None
+    modality: Optional[List[InformationModality]] = None
     notes: Optional[str] = None
 
 # ============
@@ -149,11 +162,16 @@ class Task:
                     item["modality"] = item["modality"].value
         for k in ["observability", "predictability", "directability"]:
             for item in d[k]:
+                # Convert modality to value if needed
                 if item.get("modality"):
                     if isinstance(item["modality"], list):
                         item["modality"] = [m.value if isinstance(m, Enum) else m for m in item["modality"]]
                     elif isinstance(item["modality"], Enum):
                         item["modality"] = item["modality"].value
+                # Convert source and target to value if needed
+                for field in ["source", "target"]:
+                    if isinstance(item.get(field), Enum):
+                        item[field] = item[field].value
         return d
 
     @staticmethod
@@ -161,9 +179,9 @@ class Task:
         performer = Performer(**data["performer"])
         supporter = Supporter(**data["supporter"]) if data.get("supporter") else None
         def parse_info(lst):
-            return [InformationItem(name=i["name"], modality=Modality(i.get("modality", "other")), notes=i.get("notes")) for i in (lst or [])]
+            return [InformationItem(name=i["name"], modality=InformationModality(i.get("modality") or "other"), notes=i.get("notes")) for i in (lst or [])]
         def parse_team(lst):
-            return [TeamingElement(target=i["target"], what=i["what"], modality=Modality(i["modality"]) if i.get("modality") else None, notes=i.get("notes")) for i in (lst or [])]
+            return [TeamingElement(source=i["source"], target=i["target"], what=i["what"], modality=RequirementModality(i["modality"]) if i.get("modality") else None, notes=i.get("notes")) for i in (lst or [])]
         return Task(
             name=data["name"],
             criticality=float(data["criticality"]),

@@ -1,45 +1,107 @@
 [
   {
-    "name": "test",
-    "criticality": 0.5,
+    "name": "check winds",
+    "criticality": 1.0,
     "performer": {
       "kind": "human",
-      "reliability": "red",
-      "efficiency_time_required_s": 60.0,
+      "reliability": "green",
+      "efficiency_time_required_s": 30.0,
       "familiarity": 0.0,
       "notes": null
     },
-    "procedure": "takeoff",
-    "supporter": null,
-    "time_constraint_type": "none",
-    "time_constraint_s": null,
+    "procedure": "line_up and hold",
+    "supporter": {
+      "kind": "TARS",
+      "capacity": "green",
+      "notes": null
+    },
+    "time_constraint_type": "soft",
+    "time_constraint_s": 60,
     "execution_type": "one_off",
-    "information_requirements": [],
-    "memory_requirements": [],
-    "observability": [],
+    "information_requirements": [
+      {
+        "name": "wind value",
+        "modality": "visual",
+        "notes": null
+      }
+    ],
+    "memory_requirements": [
+      {
+        "name": "runway_heading",
+        "modality": null,
+        "notes": null
+      }
+    ],
+    "observability": [
+      {
+        "source": "human",
+        "target": "TARS",
+        "what": "wind value",
+        "modality": "visual_screen",
+        "notes": null
+      },
+      {
+        "source": "TARS",
+        "target": "human",
+        "what": "task completion",
+        "modality": "auditory_voice",
+        "notes": null
+      }
+    ],
     "predictability": [],
     "directability": [],
     "tags": [],
     "notes": null
   },
   {
-    "name": "my new task",
-    "criticality": 0.5,
+    "name": "check winds",
+    "criticality": 1.0,
     "performer": {
-      "kind": "tars",
-      "reliability": "red",
-      "efficiency_time_required_s": 60.0,
-      "familiarity": 0.0,
+      "kind": "TARS",
+      "reliability": "yellow",
+      "efficiency_time_required_s": 1.0,
+      "familiarity": null,
       "notes": null
     },
-    "procedure": null,
-    "supporter": null,
-    "time_constraint_type": "none",
-    "time_constraint_s": null,
+    "procedure": "line_up and hold",
+    "supporter": {
+      "kind": "human",
+      "capacity": "yellow",
+      "notes": null
+    },
+    "time_constraint_type": "soft",
+    "time_constraint_s": 60,
     "execution_type": "one_off",
-    "information_requirements": [],
-    "memory_requirements": [],
-    "observability": [],
+    "information_requirements": [
+      {
+        "name": "wind value",
+        "modality": "visual",
+        "notes": null
+      }
+    ],
+    "memory_requirements": [
+      {
+        "name": "runway_heading",
+        "modality": null,
+        "notes": null
+      }
+    ],
+    "observability": [
+      {
+        "source": "human",
+        "target": "TARS",
+        "what": "wind value",
+        "modality": "visual_screen",
+        "notes": null
+      },
+      {
+        "source": "TARS",
+        "target": "human",
+        "what": "task completion",
+        "modality": "auditory_voice",
+        "notes": null
+      }
+    ],
     "predictability": [],
     "directability": [],
     "tags": [],
