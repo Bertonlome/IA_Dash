@@ -1,3 +1,6 @@
+"""
+© Benjamin R. Berton 2025 Polytechnique Montreal
+"""
 import dash
 from dash import html, dcc, dash_table, Input, Output, State, callback_context
 import plotly.graph_objects as go
@@ -448,6 +451,15 @@ def build_combined_interdependence_figure(df, highlight_track=None):
 
 
 app.layout = html.Div([
+    html.Div(
+        "© Benjamin R. Berton 2025 Polytechnique Montreal",
+        style={
+            "textAlign": "center",
+            "color": "#888",
+            "fontSize": "14px",
+            "marginBottom": "10px"
+        }
+    ),
     # The table goes here
     html.H2("Task Hierarchy | Team Alternatives | Capacity Assessment"),
     html.Div(id="table-wrapper", children=[table]),
@@ -523,6 +535,17 @@ app.layout = html.Div([
         dcc.Graph(id="spo_baseline-bar-chart")
     ]),
 
+    # Footer with copyright
+    html.Footer(
+        "© Benjamin R. Berton 2025 Polytechnique Montreal",
+        style={
+            "textAlign": "center",
+            "marginTop": "40px",
+            "padding": "10px 0",
+            "color": "#888",
+            "fontSize": "14px"
+        }
+    ),
 
 ], style={"fontFamily": "'Roboto', 'Helvetica', 'Arial', sans-serif"})
 
