@@ -9,40 +9,106 @@ import os
 import base64
 import io
 
-app = dash.Dash(__name__)
-DATA_FILE = "table_data_with_opd.csv"
+app = dash.Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=['assets/styles.css'])
+
+# Navigation menu component
+def create_navbar(current_pathname="/"):
+    return html.Div([
+        html.Div([
+            dcc.Link("Interdependence Analysis Table", href="/", className="nav-link" + (" active" if current_pathname == "/" else "")),
+            dcc.Link("Assumptions", href="/assumptions", className="nav-link" + (" active" if current_pathname == "/assumptions" else ""))
+        ], style={"textAlign": "left", "marginBottom": "20px"}),
+    ])
+
+DATA_FILE = "IA_updated.csv"
 if os.path.exists(DATA_FILE):
     df = pd.read_csv(DATA_FILE)
 
 color_options = ["red", "yellow", "green", "orange"]
+
+# Updated dropdown options for all categorical columns
 dropdowns = {
-    col: {
+    # Original color-based columns
+    "Human*": {
         'options': [{'label': c.capitalize(), 'value': c} for c in color_options]
+    },
+    "TARS": {
+        'options': [{'label': c.capitalize(), 'value': c} for c in color_options]
+    },
+    "TARS*": {
+        'options': [{'label': c.capitalize(), 'value': c} for c in color_options]
+    },
+    "Human": {
+        'options': [{'label': c.capitalize(), 'value': c} for c in color_options]
+    },
+    # New categorical columns
+    "Category": {
+        'options': [
+            {'label': 'NORM', 'value': 'NORM'},
+            {'label': 'ABNORM', 'value': 'ABNORM'},
+            {'label': 'EMER', 'value': 'EMER'}
+        ]
+    },
+    "Type": {
+        'options': [
+            {'label': 'SOP', 'value': 'SOP'},
+            {'label': 'Checklist', 'value': 'Checklist'},
+            {'label': 'Memory Item', 'value': 'Memory Item'}
+        ]
+    },
+    "Constraint Type": {
+        'options': [
+            {'label': 'Soft-time', 'value': 'Soft-time'},
+            {'label': 'Hard-time', 'value': 'Hard-time'}
+        ]
+    },
+    "Execution Type": {
+        'options': [
+            {'label': 'One-off', 'value': 'One-off'},
+            {'label': 'Continuous', 'value': 'Continuous'},
+            {'label': 'Cyclic', 'value': 'Cyclic'},
+            {'label': 'Monitoring', 'value': 'Monitoring'}
+        ]
     }
-    for col in ["Human*", "TARS", "TARS*", "Human"]
 }
 def style_table(df):
     styles = []
+    # Only apply color styling to the color-based columns
+    color_columns = ["Human*", "TARS", "TARS*", "Human"]
+    
     for i, row in df.iterrows():
-        for col in editable_columns:
-            value = row[col]
-            color = value.lower() if isinstance(value, str) else "white"
-            styles.append({
-                'if': {'row_index': i, 'column_id': col},
-                'backgroundColor': color if color != "white" else "#ffffff",
-                'color': color,  # Hide the text
-                'textAlign': 'center'
-            })
+        for col in color_columns:
+            if col in df.columns:
+                value = row[col]
+                if isinstance(value, str) and value.strip().lower() in ["red", "yellow", "green", "orange"]:
+                    color = value.strip().lower()
+                    styles.append({
+                        'if': {'row_index': i, 'column_id': col},
+                        'backgroundColor': color,
+                        'color': color,  # Text color matches background (invisible text)
+                        'textAlign': 'center',
+                        'fontWeight': 'bold'
+                    })
     return styles
-df = df.assign(Row=lambda x: x.index + 1)
-editable_columns = ["Human*", "TARS", "TARS*", "Human"]
+
+# No need to assign Row since it already exists in the CSV
+# df = df.assign(Row=lambda x: x.index + 1)
+
+# Updated editable columns to include new fields
+editable_columns = [
+    "Procedure", "Category", "Type", "Task Object", "Value", 
+    "Human*", "TARS", "TARS*", "Human", 
+    "Observability", "Predictability", "Directability", 
+    "Information Requirement", "Constraint Type", "Time constraint (in s)", "Execution Type"
+]
+
 table = dash_table.DataTable(
     id='responsibility-table',
     columns=[
         {"name": col, "id": col, "editable": col in editable_columns}
         for col in df.columns
     ],
-    data=df.assign(Row=lambda x: x.index + 1).to_dict("records"),
+    data=df.to_dict("records"),  # Remove the .assign() since Row already exists
     editable=True,
     row_deletable=True,
     dropdown=dropdowns,
@@ -70,7 +136,10 @@ table = dash_table.DataTable(
 columns=[
     {"name": "Row", "id": "Row", "editable": False},
     {"name": "Procedure", "id": "Procedure", "editable": True},
-    {"name": "Task", "id": "Task", "editable": True},
+    {"name": "Category", "id": "Category", "editable": True, "presentation": "dropdown"},
+    {"name": "Type", "id": "Type", "editable": True, "presentation": "dropdown"},
+    {"name": "Task Object", "id": "Task Object", "editable": True},
+    {"name": "Value", "id": "Value", "editable": True},
     {"name": "Human*", "id": "Human*", "editable": True, "presentation": "dropdown"},
     {"name": "TARS", "id": "TARS", "editable": True, "presentation": "dropdown"},
     {"name": "TARS*", "id": "TARS*", "editable": True, "presentation": "dropdown"},
@@ -78,6 +147,10 @@ columns=[
     {"name": "Observability", "id": "Observability", "editable": True},
     {"name": "Predictability", "id": "Predictability", "editable": True},
     {"name": "Directability", "id": "Directability", "editable": True},
+    {"name": "Information Requirement", "id": "Information Requirement", "editable": True},
+    {"name": "Constraint Type", "id": "Constraint Type", "editable": True, "presentation": "dropdown"},
+    {"name": "Time constraint (in s)", "id": "Time constraint (in s)", "editable": True, "type": "numeric"},
+    {"name": "Execution Type", "id": "Execution Type", "editable": True, "presentation": "dropdown"},
 ]
 
 def wrap_text(text, max_width=30):
@@ -94,7 +167,7 @@ def build_interdependence_figures(df, highlight_track=None):
     figures = {}
 
     for procedure, proc_df in df.groupby("Procedure"):
-        tasks = proc_df["Task"].tolist()
+        tasks = proc_df["Task Object"].tolist()
         height = 300 + len(tasks) * 100
         dots = []
         grey_to_black_arrows = []
@@ -188,7 +261,7 @@ def build_interdependence_figures(df, highlight_track=None):
         for dot in dots:
             row = proc_df.iloc[dot["task"]]  # get the row by task index
             hover_text = (
-                f"<b>Task:</b> {wrap_text(row['Task'])}<br>"
+                f"<b>Task:</b> {wrap_text(row['Task Object'])}<br>"
                 f"<b>Agent:</b> {dot['agent']}<br><br>"
                 f"<b>Observability:</b><br>{wrap_text(row.get('Observability', ''))}<br><br>"
                 f"<b>Predictability:</b><br>{wrap_text(row.get('Predictability', ''))}<br><br>"
@@ -272,7 +345,7 @@ def build_interdependence_figures(df, highlight_track=None):
 def build_combined_interdependence_figure(df, highlight_track=None):
     agents = ["HUMAN*", "TARS", "TARS*", "HUMAN"]
     VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
-    tasks = df["Task"].tolist()
+    tasks = df["Task Object"].tolist()
     height = 600 + len(tasks) * 100
     dots = []
     grey_to_black_arrows = []
@@ -369,7 +442,7 @@ def build_combined_interdependence_figure(df, highlight_track=None):
     for dot in dots:
         row = df.iloc[dot["task"]]
         hover_text = (
-            f"<b>Task:</b> {wrap_text(row['Task'])}<br>"
+            f"<b>Task:</b> {wrap_text(row['Task Object'])}<br>"
             f"<b>Agent:</b> {dot['agent']}<br><br>"
             f"<b>Observability:</b><br>{wrap_text(row.get('Observability', ''))}<br><br>"
             f"<b>Predictability:</b><br>{wrap_text(row.get('Predictability', ''))}<br><br>"
@@ -436,7 +509,7 @@ def build_combined_interdependence_figure(df, highlight_track=None):
         ),
         yaxis=dict(
             tickvals=list(df["task_idx"]),
-            ticktext=[wrap_text(f"{p} | {t}") for p, t in zip(df["Procedure"], df["Task"])],
+            ticktext=[wrap_text(f"{p} | {t}") for p, t in zip(df["Procedure"], df["Task Object"])],
             title="Procedure | Task",
             autorange="reversed",
             showgrid=True,
@@ -450,104 +523,194 @@ def build_combined_interdependence_figure(df, highlight_track=None):
     return fig
 
 
+# Page layouts
+def interdependence_analysis_page():
+    return html.Div([
+        # The table goes here
+        html.H2("Interdependence Table - Engine Failure at Take Off", style={"textAlign": "center"}),
+        html.Div(id="table-wrapper", children=[table]),
+        html.Div([
+            html.Div([
+                # Left-aligned buttons
+                html.Div([
+                    dcc.Upload(
+                        id='upload-data',
+                        children=html.Button('Load Table', id='load-button', n_clicks=0),
+                        multiple=False,
+                        style={
+                            'display': 'inline-block',
+                            'marginRight': '10px'
+                        }
+                    ),
+                    html.Button("Add Row", id="add-row-button", n_clicks=0),
+                    html.Button("Copy Cell Down", id="copy-down-button", n_clicks=0),
+                ], style={"display": "flex", "gap": "10px"}),
+
+                # Right-aligned Save button
+                html.Div([
+                    html.Button("Save Table", disabled=False, id="save-button", n_clicks=0)
+                ], style={"marginLeft": "auto"})  # pushes this div to the right
+            ], style={"display": "flex", "width": "100%"}),
+            html.Div(id="save-confirmation", style={"marginTop": "10px", "fontStyle": "italic"})
+        ]),
+
+        html.H2("Workflow graph", style={"textAlign": "center"}),
+
+        # Dropdown menu to select procedure
+        html.Div([
+            dcc.Dropdown(
+                id="procedure-dropdown",
+                options=[{"label": proc, "value": proc} for proc in df["Procedure"].unique()],
+                value=df["Procedure"].unique()[0],
+                clearable=True,
+                style={"width": "50%", "margin": "0 auto"}
+            )
+        ]),
+
+        dcc.RadioItems(
+        id="highlight-selector",
+        options=[
+            {"label": "No highlight", "value": "none"},
+            {"label": "Baseline SPO", "value": "human_baseline"},
+            {"label": "Most reliable path", "value": "most_reliable"}
+        ],
+        value="none",
+        labelStyle={'display': 'inline-block', 'margin-right': '20px'},
+        style={"textAlign": "center", "marginTop": "20px"}
+        ),
+
+        # Graph
+        dcc.Graph(id="interdependence-graph", config={
+            "displayModeBar": False
+        }),
+
+        # Labels
+        html.Div([
+            html.Div("Team Alternative 1", style={
+                "width": "50%", "display": "inline-block", "textAlign": "center", "marginTop": "10px", "marginLeft": "150px"
+            }),
+            html.Div("Team Alternative 2", style={
+                "width": "50%", "display": "inline-block", "textAlign": "center", "marginTop": "10px"
+            }),
+        ], style={"display": "flex", "width": "100%"}),
+
+        # Bar chart for most reliable path color counts
+        html.Div([
+            dcc.Graph(id="bar-chart-whole-scenario"),
+            dcc.Graph(id="most-reliable-bar-chart"),
+            dcc.Graph(id="spo_baseline-bar-chart")
+        ]),
+
+        # Footer with copyright
+        html.Footer(
+            "© Benjamin R. Berton 2025 Polytechnique Montreal",
+            style={
+                "textAlign": "center",
+                "marginTop": "40px",
+                "padding": "10px 0",
+                "color": "#888",
+                "fontSize": "14px"
+            }
+        ),
+
+    ], style={"fontFamily": "'Roboto', 'Helvetica', 'Arial', sans-serif"})
+
+
+def assumptions_page():
+    return html.Div([
+        html.H2("Assumptions", style={"textAlign": "center"}),
+        html.Div([
+            html.H3("Operational Scenario", style={"marginBottom": "20px"}),
+            html.Div([
+                html.H4("Takeoff with an engine failure caused by a bird strike", style={"marginTop": "30px", "marginBottom": "15px"}),
+                html.Ul([
+                    html.Li([html.B("Departure Airport"), ": CYUL"]),
+                    html.Li([html.B("Arrival Airport"), ": CYOW"]),
+                    html.Li([html.B("Time of day"), ": Day (14:00 local time)"]),
+                    html.Li([html.B("Weather conditions"), ": CAVOK"]),
+                    html.Li([html.B("Wind"), ": Calm, 5 knots, 160°"]),
+                    html.Li([html.B("Temperature"), ": 22°C"]),
+                    html.Li([html.B("Atmospheric Pressure"), ": 29.92 inHg"]),
+                    html.Li([html.B("Departure runway"), ": 24R"]),
+                    html.Li([html.B("Arrival Runway"), ": 14"]),
+                    html.Li([html.B("Aircraft"), ": Cessna Citation Mustang Very Light Jet"]),
+                    html.Li([html.B("Crew"), ": 1 pilot, 2 pax"]),
+                    html.Li([html.B("Flight phase"), ": Takeoff"]),
+                    html.Li([html.B("Emergency"), ": Engine failure caused by a bird strike"]),
+                ], style={"fontSize": "16px", "lineHeight": "1.6"}),
+            ], style={"maxWidth": "800px", "margin": "0 auto", "padding": "20px"})
+        ]),
+        html.Div([
+            html.H3("Single Pilot", style={"marginBottom": "20px"}),
+            html.Div([
+                html.H4("Key Assumptions:", style={"marginTop": "30px", "marginBottom": "15px"}),
+                html.Ul([
+                    html.Li([html.B("Role"), ": The pilot is the captain and retains final authority and responsibility for decision making throughout the flight."]),
+                    html.Li([html.B("Experience"), ": >5,000 flight hours, including >1,000 hours in type."]),
+                    html.Li([html.B("Training"), ": Recent training on emergency procedures, including engine failure at takeoff scenarios."]),
+                    html.Li([html.B("Health"), ": Good health, well-rested, and fit to fly."]),
+                    html.Li([html.B("Support"), ": The pilot has access to TARS for assistance with monitoring and procedural guidance."]),
+                ], style={"fontSize": "16px", "lineHeight": "1.6"}),
+            ], style={"maxWidth": "800px", "margin": "0 auto", "padding": "20px"})
+        ]),
+        html.Div([
+            html.H3("Autonomous System : TARS", style={"marginBottom": "20px"}),
+            html.Div([
+                html.H4("Key Assumptions:", style={"marginTop": "30px", "marginBottom": "15px"}),
+                html.Ul([
+                    html.Li([html.B("Role"), ": TARS assists the pilot on multiple tasks during normal, abnormal and emergency situation according to the briefing. But the pilot retains final authority. TARS is designed to complement human decision-making, not replace it. The pilot must remain engaged and aware of the flight situation at all times."]),
+                    html.Li([html.B("Description: "), "TARS is implemented as a reactive software designed to assist the pilot in managing the flight scenario. TARS organizes its behavior into a structured hierarchy of states and substates. Each state encapsulates a specific procedural phase of the scenario, with transitions triggered by defined environmental conditions."]),
+                    html.Li([html.B("Sensors"), ": TARS has access to all flight parameters available in the avionics system, including aircraft state and system status. TARS does not have access to environmental parameters outside of the avionics system."]),
+                    html.Li([html.B("Actuators"), ": TARS can interact with the pilot through the interface with the pilot, for checklist support. TARS can interact with the airplane through a predefined set of commands, including the FMS and autopilot, but TARS cannot perform physical actions in the cockpit (e.g., moving flight controls, switching levers, pushing buttons)."]),
+                    html.Li([html.B("Reliability"), ": TARS is assumed to operate without technical failures during the scenario. TARS is assumed to correctly interpret sensor data and execute commands without errors and under 1ms latency."]),
+                    html.Li([html.B("Graphical Interface"), ": The Human-TARS interface is an EFB-like tactile application run on a tablet placed on the left-side of the single pilot in the cockpit that provides access to TARS current state and behavioral intent. The interface allows the pilot to monitor TARS actions, receive alerts, and input commands."]),
+                    html.Li([html.B("Voice Interface"), ": TARS can communicate with the pilot using auditory alerts and speech synthesis. The pilot can issue commands to TARS vocally (e.g. cancel action)."]),
+                ], style={"fontSize": "16px", "lineHeight": "1.6"}),
+            ], style={"maxWidth": "800px", "margin": "0 auto", "padding": "20px"})
+        ]),
+        
+        # Footer with copyright
+        html.Footer(
+            "© Benjamin R. Berton 2025 Polytechnique Montreal",
+            style={
+                "textAlign": "center",
+                "marginTop": "40px",
+                "padding": "10px 0",
+                "color": "#888",
+                "fontSize": "14px"
+            }
+        ),
+        
+    ], style={"fontFamily": "'Roboto', 'Helvetica', 'Arial', sans-serif"})
+
+
 app.layout = html.Div([
+    dcc.Location(id='url', refresh=False),
     html.Div(
         "© Benjamin R. Berton 2025 Polytechnique Montreal",
         style={
-            "textAlign": "center",
+            "textAlign": "right",
             "color": "#888",
             "fontSize": "14px",
             "marginBottom": "10px"
         }
     ),
-    # The table goes here
-    html.H2("Task Hierarchy | Team Alternatives | Capacity Assessment"),
-    html.Div(id="table-wrapper", children=[table]),
-    html.Div([
-        html.Div([
-            # Left-aligned buttons
-            html.Div([
-                dcc.Upload(
-                    id='upload-data',
-                    children=html.Button('📂 Load Table', id='load-button', n_clicks=0),
-                    multiple=False,
-                    style={
-                        'display': 'inline-block',
-                        'marginRight': '10px'
-                    }
-                ),
-                html.Button("➕ Add Row", id="add-row-button", n_clicks=0),
-                html.Button("⬇️ Copy Cell Down", id="copy-down-button", n_clicks=0),
-            ], style={"display": "flex", "gap": "10px"}),
+    html.Div(id='navbar'),
+    html.Div(id='page-content')
+])
 
-            # Right-aligned Save button
-            html.Div([
-                html.Button("💾 Save Table", disabled=False, id="save-button", n_clicks=0)
-            ], style={"marginLeft": "auto"})  # pushes this div to the right
-        ], style={"display": "flex", "width": "100%"}),
-        html.Div(id="save-confirmation", style={"marginTop": "10px", "fontStyle": "italic"})
-    ]),
+# Callback to update navbar based on current pathname
+@app.callback(Output('navbar', 'children'), Input('url', 'pathname'))
+def update_navbar(pathname):
+    return create_navbar(current_pathname=pathname)
 
-    html.H2("Workflow graph", style={"textAlign": "center"}),
-
-    # Dropdown menu to select procedure
-    html.Div([
-        dcc.Dropdown(
-            id="procedure-dropdown",
-            options=[{"label": proc, "value": proc} for proc in df["Procedure"].unique()],
-            value=df["Procedure"].unique()[0],
-            clearable=True,
-            style={"width": "50%", "margin": "0 auto"}
-        )
-    ]),
-
-    dcc.RadioItems(
-    id="highlight-selector",
-    options=[
-        {"label": "No highlight", "value": "none"},
-        {"label": "Baseline SPO", "value": "human_baseline"},
-        {"label": "Most reliable path", "value": "most_reliable"}
-    ],
-    value="none",
-    labelStyle={'display': 'inline-block', 'margin-right': '20px'},
-    style={"textAlign": "center", "marginTop": "20px"}
-    ),
-
-    # Graph
-    dcc.Graph(id="interdependence-graph", config={
-        "displayModeBar": False
-    }),
-
-    # Labels
-    html.Div([
-        html.Div("Team Alternative 1", style={
-            "width": "50%", "display": "inline-block", "textAlign": "center", "marginTop": "10px", "marginLeft": "150px"
-        }),
-        html.Div("Team Alternative 2", style={
-            "width": "50%", "display": "inline-block", "textAlign": "center", "marginTop": "10px"
-        }),
-    ], style={"display": "flex", "width": "100%"}),
-
-    # Bar chart for most reliable path color counts
-    html.Div([
-        dcc.Graph(id="bar-chart-whole-scenario"),
-        dcc.Graph(id="most-reliable-bar-chart"),
-        dcc.Graph(id="spo_baseline-bar-chart")
-    ]),
-
-    # Footer with copyright
-    html.Footer(
-        "© Benjamin R. Berton 2025 Polytechnique Montreal",
-        style={
-            "textAlign": "center",
-            "marginTop": "40px",
-            "padding": "10px 0",
-            "color": "#888",
-            "fontSize": "14px"
-        }
-    ),
-
-], style={"fontFamily": "'Roboto', 'Helvetica', 'Arial', sans-serif"})
+# Callback for page routing
+@app.callback(Output('page-content', 'children'), Input('url', 'pathname'))
+def display_page(pathname):
+    if pathname == '/assumptions':
+        return assumptions_page()
+    else:
+        return interdependence_analysis_page()
 
 @app.callback(
     Output("interdependence-graph", "figure"),
@@ -873,19 +1036,12 @@ def handle_table(data, save_clicks, upload_contents, add_row_clicks, copy_clicks
     ctx = callback_context
     triggered = ctx.triggered[0]["prop_id"].split(".")[0]
 
-    color_options = ["red", "yellow", "green", "orange"]
-    dropdowns = {
-        col: {
-            'options': [{'label': c.capitalize(), 'value': c} for c in color_options]
-        }
-        for col in ["Human*", "TARS", "TARS*", "Human"]
-    }
-
     save_message = ""
 
     # Case 1: Save button clicked
     if triggered == "save-button":
         df = pd.DataFrame(data)
+        # Don't recreate Row column if it already exists
         df.to_csv(DATA_FILE, index=False)
         save_message = f"✅ Table saved to {DATA_FILE}"
 
@@ -918,10 +1074,14 @@ def handle_table(data, save_clicks, upload_contents, add_row_clicks, copy_clicks
     else:
         df = pd.DataFrame(data)
 
+    # Ensure Row column is properly maintained (no need to reassign if it exists)
+    if 'Row' not in df.columns:
+        df = df.assign(Row=lambda x: x.index + 1)
+
     updated_table = dash_table.DataTable(
         id='responsibility-table',
         columns=columns,
-        data=df.assign(Row=lambda x: x.index + 1).to_dict("records"),
+        data=df.to_dict("records"),
         editable=True,
         dropdown=dropdowns,
         style_data_conditional=style_table(df),

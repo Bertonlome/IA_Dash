@@ -1,0 +1,36 @@
+.nav-link {
+    padding: 10px 20px !important;
+    font-family: 'Roboto', sans-serif !important;
+    text-decoration: none !important;
+    color: black !important;
+    border-radius: 5px !important;
+    margin-right: 10px !important;
+    transition: all 0.3s ease !important;
+    display: inline-block !important;
+}
+
+.nav-link:hover {
+    background-color: #cacaca !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
+    text-decoration: none !important;
+}
+
+.nav-link:active {
+    background-color: #cacaca !important;
+    transform: translateY(0) !important;
+    text-decoration: none !important;
+}
+
+/* Active page styling */
+.nav-link.active {
+    text-decoration: underline !important;
+    font-weight: bold !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+}
+
+/* Ensure active state overrides hover */
+.nav-link.active:hover {
+    text-decoration: underline !important;
+    background-color: #d1e7ff !important;
+}
