@@ -13,4 +13,4 @@ COPY . /app/
 EXPOSE 7860
 
 # Run the application with gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "1", "--threads", "2", "--timeout", "120", "app:server"]
+CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "1", "--threads", "2", "--timeout", "120", "python_dash_ia:server"]
