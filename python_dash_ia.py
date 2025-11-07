@@ -654,7 +654,8 @@ app.layout = html.Div([
         dcc.Dropdown(
             id="procedure-dropdown",
             options=[{"label": proc, "value": proc} for proc in df["Procedure"].unique()],
-            value=df["Procedure"].unique()[0] if len(df["Procedure"].unique()) > 0 else None,
+            value=None,
+            placeholder="Select a procedure to filter the graph...",
             clearable=True,
             style={"width": "50%", "margin": "0 auto"}
         )
