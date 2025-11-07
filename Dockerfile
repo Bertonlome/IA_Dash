@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY python_dash_IA.py .
+COPY app.py .
 COPY table_hat_game.csv .
 COPY assets/ ./assets/
 
@@ -24,4 +25,4 @@ ENV HOST=0.0.0.0
 ENV PORT=7860
 
 # Run the application with gunicorn
-CMD gunicorn --bind 0.0.0.0:7860 --workers 1 --threads 2 --timeout 120 python_dash_IA:server
+CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "1", "--threads", "2", "--timeout", "120", "app:server"]
