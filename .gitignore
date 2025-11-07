@@ -3,6 +3,13 @@
 *.key
 *.pem
 
+# Images and binary files
+Images/
+*.png
+*.jpg
+*.jpeg
+*.gif
+
 # Python
 __pycache__/
 *.py[cod]
