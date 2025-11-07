@@ -640,7 +640,8 @@ app.layout = html.Div([
 
             # Right-aligned Save button
             html.Div([
-                html.Button("💾 Save Table", disabled=False, id="save-button", n_clicks=0)
+                html.Button("💾 Save Table", disabled=False, id="save-button", n_clicks=0),
+                dcc.Download(id="download-csv")
             ], style={"marginLeft": "auto"})  # pushes this div to the right
         ], style={"display": "flex", "width": "100%"}),
         html.Div(id="save-confirmation", style={"marginTop": "10px", "fontStyle": "italic"})
@@ -1103,6 +1104,7 @@ def ensure_all_columns(df, columns):
 @app.callback(
     Output("table-wrapper", "children"),
     Output("save-confirmation", "children"),
+    Output("download-csv", "data"),
     Input("responsibility-table", "data"),
     Input("save-button", "n_clicks"),
     Input("upload-data", "contents"),
@@ -1130,8 +1132,7 @@ def handle_table(data, save_clicks, upload_contents, add_row_clicks, copy_clicks
     if triggered == "save-button":
         df = pd.DataFrame(data)
         df = ensure_all_columns(df, [col["id"] for col in columns])
-        df.to_csv(DATA_FILE, index=False)
-        save_message = f"✅ Table saved to {DATA_FILE}"
+        save_message = f"✅ Table downloaded as table_hat_game.csv"
 
     # Case 2: File uploaded
     elif triggered == "upload-data" and upload_contents is not None:
@@ -1192,7 +1193,15 @@ def handle_table(data, save_clicks, upload_contents, add_row_clicks, copy_clicks
         style_table={'overflowX': 'auto', 'border': '1px solid lightgrey'},
         row_deletable=True,
     )
-    return updated_table, save_message
+    
+    # Trigger download if save button was clicked
+    download_data = None
+    if triggered == "save-button":
+        df_to_download = pd.DataFrame(data)
+        df_to_download = ensure_all_columns(df_to_download, [col["id"] for col in columns])
+        download_data = dcc.send_data_frame(df_to_download.to_csv, "table_hat_game.csv", index=False)
+    
+    return updated_table, save_message, download_data
 
 
 # Expose server for gunicorn
