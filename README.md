@@ -1,3 +1,13 @@
+---
+title: Interdependence Analysis
+emoji: 🔗
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_file: python_dash_IA.py
+pinned: false
+---
+
 # Interdependence Analysis — Dash App (Hugging Face Space)
 
 - Framework: Plotly Dash
