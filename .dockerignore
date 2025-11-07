@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment files
+.env
+*.key
+
+# Test files
+test_*.py
+*_test.py
+
+# Documentation
+*.md
+!README.md
+
+# Images (unless needed)
+Images/
+screenshots/
+
+# Other CSV files not needed for production
+table_data*.csv
+tasks.csv
+IA.csv
+
+# Other Python files not needed
+task*.py
+OPD_generation.py
+animated_3D_graph.py
+python_dash_IA.py
