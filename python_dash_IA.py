@@ -1195,5 +1195,8 @@ def handle_table(data, save_clicks, upload_contents, add_row_clicks, copy_clicks
     return updated_table, save_message
 
 
+# Expose server for gunicorn
+server = app.server
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8050, debug=False)
