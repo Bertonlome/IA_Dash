@@ -1144,7 +1144,7 @@ def handle_table(data, save_clicks, upload_contents, add_row_clicks, copy_clicks
             df = ensure_all_columns(df, [col["id"] for col in columns])
             save_message = f"✅ Loaded {upload_filename}"
         except Exception as e:
-            return dash.no_update, f"⚠️ Error loading file: {str(e)}"
+            return dash.no_update, f"⚠️ Error loading file: {str(e)}", None
 
     # Case 3: Add Row button clicked
     elif triggered == "add-row-button":
