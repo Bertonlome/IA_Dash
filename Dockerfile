@@ -3,11 +3,13 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Copy and install dependencies
-COPY requirements.txt /app/
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all application files
-COPY . /app/
+# Copy application files explicitly
+COPY python_dash_ia.py ./
+COPY table_hat_game.csv ./
+COPY assets ./assets
 
 # Expose port 7860 (Hugging Face Spaces default)
 EXPOSE 7860
