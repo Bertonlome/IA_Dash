@@ -712,12 +712,12 @@ app.layout = html.Div([
     Output("most-reliable-bar-chart", "figure"),
     Input("procedure-dropdown", "value"),
     Input("highlight-selector", "value"),
-    State("responsibility-table", "data")
+    Input("responsibility-table", "data")
 )
 def update_graph_and_bar(procedure, highlight_track, data):
     df = pd.DataFrame(data)
     if df.empty:
-        return go.Figure(), go.Figure()
+        return go.Figure(), go.Figure(), go.Figure()
     if highlight_track == "none":
         highlight_track = None
 
