@@ -224,13 +224,13 @@ def build_interdependence_figures(df, highlight_track=None):
 
             # If both UGV* and UAV* are top performers in the PREVIOUS task, only use UGV* as source
             if "UGV*" in prev_performers and "UAV*" in prev_performers:
-                filtered_prev_performers = ["UGV*"]
+                filtered_prev_performers = [p for p in prev_performers if p != "UAV*"]
             else:
                 filtered_prev_performers = prev_performers
 
             # If both UGV* and UAV* are top performers in the CURRENT task, only draw arrows to UGV*
             if "UGV*" in curr_performers and "UAV*" in curr_performers:
-                filtered_curr_performers = ["UGV*"]
+                filtered_curr_performers = [p for p in curr_performers if p != "UAV*"]
             else:
                 filtered_curr_performers = curr_performers
 
@@ -480,13 +480,13 @@ def build_combined_interdependence_figure(df, highlight_track=None):
 
         # If both UGV* and UAV* are top performers in the PREVIOUS task, only use UGV* as source
         if "UGV*" in prev_performers and "UAV*" in prev_performers:
-            filtered_prev_performers = ["UGV*"]
+            filtered_prev_performers = [p for p in prev_performers if p != "UAV*"]
         else:
             filtered_prev_performers = prev_performers
 
         # If both UGV* and UAV* are top performers in the CURRENT task, only draw arrows to UGV*
         if "UGV*" in curr_performers and "UAV*" in curr_performers:
-            filtered_curr_performers = ["UGV*"]
+            filtered_curr_performers = [p for p in curr_performers if p != "UAV*"]
         else:
             filtered_curr_performers = curr_performers
 
