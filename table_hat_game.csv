@@ -27,7 +27,7 @@ Row,Procedure,Task,Human*,UGV,UAV,UGV*,UAV*,Human,Observability,Predictability,D
 26,Execute the action,Decide to place a bridge,green,green,red,green,red,yellow,The player must be able to see the amount of wood transported by the UGV to place bridges; The player should be able to see where the UGV plan on placing a bridge,The player must be able to predict the location of the bridge and when it will be placed,The player should be able to stop/modify the bridge plan; the player should be able to direct the UGV to place a bridge
 27,Execute the action,Place a bridge,red,red,red,green,red,red,The UGV should display the possible location for placing the bridge,The player must be able to predict the location of the bridge,
 28,Execute the action,Move over a bridge,red,red,red,green,green,red,,,
-29,Manage battery,Monitor battery level,yellow,yellow,yellow,green,green,,The robot must display battery level; the robot must alert when battery is low,The player should be able to predict battery depletion of the robots,
+29,Manage battery,Monitor battery level,yellow,yellow,yellow,green,green,red,The robot must display battery level; the robot must alert when battery is low,The player should be able to predict battery depletion of the robots,
 30,Execute the action,Stop executing steps of the path,green,red,red,green,green,red,The robot must alert when path execution has been canceled,The player must be able to predict when the path will be stopped by the robots,The player should be able to stop the execution of the path
 31,Planning the action,Decide to replan the path,green,red,red,red,red,red,,,The player should be able to send the path to the robot for execution
 32,Execute the action,Return to base,red,red,red,green,green,red,,,
