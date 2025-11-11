@@ -304,6 +304,12 @@ def build_interdependence_figures(df, highlight_track=None):
             y = arrow["task"]
             x_left = agent_pos[arrow["left_agent"]]
             x_right = agent_pos[arrow["right_agent"]]
+            
+            # Check if most reliable track goes through UGV* for this task
+            is_highlighted = False
+            if highlight_track == "most_reliable":
+                is_highlighted = (y, "UGV*") in most_reliable_track
+            
             # Draw left-to-right arrow
             fig.add_annotation(
                 x=x_right, y=y, ax=x_left, ay=y,
@@ -311,8 +317,8 @@ def build_interdependence_figures(df, highlight_track=None):
                 showarrow=True,
                 arrowhead=2,
                 arrowsize=1,
-                arrowwidth=2,
-                arrowcolor="black",
+                arrowwidth=4 if is_highlighted else 2,
+                arrowcolor="crimson" if is_highlighted else "black",
                 opacity=0.9
             )
             # Draw right-to-left arrow
@@ -322,8 +328,8 @@ def build_interdependence_figures(df, highlight_track=None):
                 showarrow=True,
                 arrowhead=2,
                 arrowsize=1,
-                arrowwidth=2,
-                arrowcolor="black",
+                arrowwidth=4 if is_highlighted else 2,
+                arrowcolor="crimson" if is_highlighted else "black",
                 opacity=0.9
             )
 
@@ -560,6 +566,12 @@ def build_combined_interdependence_figure(df, highlight_track=None):
         y = arrow["task"]
         x_left = agent_pos[arrow["left_agent"]]
         x_right = agent_pos[arrow["right_agent"]]
+        
+        # Check if most reliable track goes through UGV* for this task
+        is_highlighted = False
+        if highlight_track == "most_reliable":
+            is_highlighted = (y, "UGV*") in most_reliable_track
+        
         # Draw left-to-right arrow
         fig.add_annotation(
             x=x_right, y=y, ax=x_left, ay=y,
@@ -567,8 +579,8 @@ def build_combined_interdependence_figure(df, highlight_track=None):
             showarrow=True,
             arrowhead=2,
             arrowsize=1,
-            arrowwidth=2,
-            arrowcolor="black",
+            arrowwidth=4 if is_highlighted else 2,
+            arrowcolor="crimson" if is_highlighted else "black",
             opacity=0.9
         )
         # Draw right-to-left arrow
@@ -578,8 +590,8 @@ def build_combined_interdependence_figure(df, highlight_track=None):
             showarrow=True,
             arrowhead=2,
             arrowsize=1,
-            arrowwidth=2,
-            arrowcolor="black",
+            arrowwidth=4 if is_highlighted else 2,
+            arrowcolor="crimson" if is_highlighted else "black",
             opacity=0.9
         )
 
