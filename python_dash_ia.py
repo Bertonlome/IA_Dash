@@ -701,7 +701,8 @@ app.layout = html.Div([
     # Bar chart for most reliable path color counts
     html.Div([
         dcc.Graph(id="overall-scenario-bar-chart"),
-        dcc.Graph(id="most-reliable-bar-chart")
+        dcc.Graph(id="most-reliable-bar-chart"),
+        dcc.Graph(id="allocation-type-bar-chart")
     ]),
 
     # Footer with copyright
@@ -722,6 +723,7 @@ app.layout = html.Div([
     Output("interdependence-graph", "figure"),
     Output("overall-scenario-bar-chart", "figure"),
     Output("most-reliable-bar-chart", "figure"),
+    Output("allocation-type-bar-chart", "figure"),
     Input("procedure-dropdown", "value"),
     Input("highlight-selector", "value"),
     Input("responsibility-table", "data")
@@ -729,7 +731,7 @@ app.layout = html.Div([
 def update_graph_and_bar(procedure, highlight_track, data):
     df = pd.DataFrame(data)
     if df.empty:
-        return go.Figure(), go.Figure(), go.Figure()
+        return go.Figure(), go.Figure(), go.Figure(), go.Figure()
     if highlight_track == "none":
         highlight_track = None
 
@@ -832,50 +834,202 @@ def update_graph_and_bar(procedure, highlight_track, data):
                 supporter_orange += 1
 
     bar_fig_whole_scenario = go.Figure()
-    # Stacked bars for performer colors
+    
+    # Individual bars for each agent and color - Performers
     bar_fig_whole_scenario.add_trace(go.Bar(
-        name="Human Performer",
-        x=["Performer Green", "Performer Yellow", "Performer Orange"],
-        y=[human_performer_green, human_performer_yellow, human_performer_orange],
-        marker_color=["seagreen", "gold", "darkorange"]
+        name="Human",
+        x=["Performer Green"],
+        y=[human_performer_green],
+        marker_color="seagreen",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
     ))
     bar_fig_whole_scenario.add_trace(go.Bar(
-        name="UGV Performer",
-        x=["Performer Green", "Performer Yellow", "Performer Orange"],
-        y=[ugv_performer_green, ugv_performer_yellow, ugv_performer_orange],
-        marker_color=["limegreen", "khaki", "orange"]
+        name="UGV",
+        x=["Performer Green"],
+        y=[ugv_performer_green],
+        marker_color="limegreen",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
     ))
     bar_fig_whole_scenario.add_trace(go.Bar(
-        name="UAV Performer",
-        x=["Performer Green", "Performer Yellow", "Performer Orange"],
-        y=[uav_performer_green, uav_performer_yellow, uav_performer_orange],
-        marker_color=["mediumspringgreen", "lemonchiffon", "coral"]
+        name="UAV",
+        x=["Performer Green"],
+        y=[uav_performer_green],
+        marker_color="mediumspringgreen",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
     ))
-    # Stacked bars for supporter colors
+    
     bar_fig_whole_scenario.add_trace(go.Bar(
-        name="Human Supporter",
-        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
-        y=[human_supporter_green, human_supporter_yellow, human_supporter_orange],
-        marker_color=["seagreen", "gold", "darkorange"]
+        name="Human",
+        x=["Performer Yellow"],
+        y=[human_performer_yellow],
+        marker_color="gold",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
     ))
     bar_fig_whole_scenario.add_trace(go.Bar(
-        name="UGV Supporter",
-        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
-        y=[ugv_supporter_green, ugv_supporter_yellow, ugv_supporter_orange],
-        marker_color=["limegreen", "khaki", "orange"]
+        name="UGV",
+        x=["Performer Yellow"],
+        y=[ugv_performer_yellow],
+        marker_color="khaki",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
     ))
     bar_fig_whole_scenario.add_trace(go.Bar(
-        name="UAV Supporter",
-        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
-        y=[uav_supporter_green, uav_supporter_yellow, uav_supporter_orange],
-        marker_color=["mediumspringgreen", "lemonchiffon", "coral"]
+        name="UAV",
+        x=["Performer Yellow"],
+        y=[uav_performer_yellow],
+        marker_color="lemonchiffon",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
     ))
+    
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="Human",
+        x=["Performer Orange"],
+        y=[human_performer_orange],
+        marker_color="darkorange",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UGV",
+        x=["Performer Orange"],
+        y=[ugv_performer_orange],
+        marker_color="orange",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UAV",
+        x=["Performer Orange"],
+        y=[uav_performer_orange],
+        marker_color="coral",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
+    ))
+    
+    # Individual bars for each agent and color - Supporters
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="Human",
+        x=["Supporter Green"],
+        y=[human_supporter_green],
+        marker_color="seagreen",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UGV",
+        x=["Supporter Green"],
+        y=[ugv_supporter_green],
+        marker_color="limegreen",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UAV",
+        x=["Supporter Green"],
+        y=[uav_supporter_green],
+        marker_color="mediumspringgreen",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
+    ))
+    
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="Human",
+        x=["Supporter Yellow"],
+        y=[human_supporter_yellow],
+        marker_color="gold",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UGV",
+        x=["Supporter Yellow"],
+        y=[ugv_supporter_yellow],
+        marker_color="khaki",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UAV",
+        x=["Supporter Yellow"],
+        y=[uav_supporter_yellow],
+        marker_color="lemonchiffon",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
+    ))
+    
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="Human",
+        x=["Supporter Orange"],
+        y=[human_supporter_orange],
+        marker_color="darkorange",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UGV",
+        x=["Supporter Orange"],
+        y=[ugv_supporter_orange],
+        marker_color="orange",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig_whole_scenario.add_trace(go.Bar(
+        name="UAV",
+        x=["Supporter Orange"],
+        y=[uav_supporter_orange],
+        marker_color="coral",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
+    ))
+    
     bar_fig_whole_scenario.update_layout(
         title="Performer and Supporter Capacities in Mixed Initiative",
         xaxis_title="Role and Capacity",
         yaxis_title="Number of Tasks",
-        barmode='stack',
-        bargap=0.3,
+        barmode='group',
+        bargap=0.15,
+        bargroupgap=0.1,
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False
@@ -1056,56 +1210,305 @@ def update_graph_and_bar(procedure, highlight_track, data):
                     human_supporter_orange += 1
 
     bar_fig = go.Figure()
-    # Stacked bars for performer colors
+    
+    # Individual bars for each agent and color - Performers
     bar_fig.add_trace(go.Bar(
-        name="Human Performer",
-        x=["Performer Green", "Performer Yellow", "Performer Orange"],
-        y=[human_performer_green, human_performer_yellow, human_performer_orange],
-        marker_color=["seagreen", "gold", "darkorange"]
+        name="Human",
+        x=["Performer Green"],
+        y=[human_performer_green],
+        marker_color="seagreen",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
     ))
     bar_fig.add_trace(go.Bar(
-        name="UGV Performer",
-        x=["Performer Green", "Performer Yellow", "Performer Orange"],
-        y=[ugv_performer_green, ugv_performer_yellow, ugv_performer_orange],
-        marker_color=["limegreen", "khaki", "orange"]
+        name="UGV",
+        x=["Performer Green"],
+        y=[ugv_performer_green],
+        marker_color="limegreen",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
     ))
     bar_fig.add_trace(go.Bar(
-        name="UAV Performer",
-        x=["Performer Green", "Performer Yellow", "Performer Orange"],
-        y=[uav_performer_green, uav_performer_yellow, uav_performer_orange],
-        marker_color=["mediumspringgreen", "lemonchiffon", "coral"]
+        name="UAV",
+        x=["Performer Green"],
+        y=[uav_performer_green],
+        marker_color="mediumspringgreen",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
     ))
-    # Stacked bars for supporter colors
+    
     bar_fig.add_trace(go.Bar(
-        name="Human Supporter",
-        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
-        y=[human_supporter_green, human_supporter_yellow, human_supporter_orange],
-        marker_color=["seagreen", "gold", "darkorange"]
+        name="Human",
+        x=["Performer Yellow"],
+        y=[human_performer_yellow],
+        marker_color="gold",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
     ))
     bar_fig.add_trace(go.Bar(
-        name="UGV Supporter",
-        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
-        y=[ugv_supporter_green, ugv_supporter_yellow, ugv_supporter_orange],
-        marker_color=["limegreen", "khaki", "orange"]
+        name="UGV",
+        x=["Performer Yellow"],
+        y=[ugv_performer_yellow],
+        marker_color="khaki",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
     ))
     bar_fig.add_trace(go.Bar(
-        name="UAV Supporter",
-        x=["Supporter Green", "Supporter Yellow", "Supporter Orange"],
-        y=[uav_supporter_green, uav_supporter_yellow, uav_supporter_orange],
-        marker_color=["mediumspringgreen", "lemonchiffon", "coral"]
+        name="UAV",
+        x=["Performer Yellow"],
+        y=[uav_performer_yellow],
+        marker_color="lemonchiffon",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
     ))
+    
+    bar_fig.add_trace(go.Bar(
+        name="Human",
+        x=["Performer Orange"],
+        y=[human_performer_orange],
+        marker_color="darkorange",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UGV",
+        x=["Performer Orange"],
+        y=[ugv_performer_orange],
+        marker_color="orange",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UAV",
+        x=["Performer Orange"],
+        y=[uav_performer_orange],
+        marker_color="coral",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
+    ))
+    
+    # Individual bars for each agent and color - Supporters
+    bar_fig.add_trace(go.Bar(
+        name="Human",
+        x=["Supporter Green"],
+        y=[human_supporter_green],
+        marker_color="seagreen",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UGV",
+        x=["Supporter Green"],
+        y=[ugv_supporter_green],
+        marker_color="limegreen",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UAV",
+        x=["Supporter Green"],
+        y=[uav_supporter_green],
+        marker_color="mediumspringgreen",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
+    ))
+    
+    bar_fig.add_trace(go.Bar(
+        name="Human",
+        x=["Supporter Yellow"],
+        y=[human_supporter_yellow],
+        marker_color="gold",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UGV",
+        x=["Supporter Yellow"],
+        y=[ugv_supporter_yellow],
+        marker_color="khaki",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UAV",
+        x=["Supporter Yellow"],
+        y=[uav_supporter_yellow],
+        marker_color="lemonchiffon",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
+    ))
+    
+    bar_fig.add_trace(go.Bar(
+        name="Human",
+        x=["Supporter Orange"],
+        y=[human_supporter_orange],
+        marker_color="darkorange",
+        showlegend=False,
+        text=["Human"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UGV",
+        x=["Supporter Orange"],
+        y=[ugv_supporter_orange],
+        marker_color="orange",
+        showlegend=False,
+        text=["UGV"],
+        textposition='outside',
+        textangle=0
+    ))
+    bar_fig.add_trace(go.Bar(
+        name="UAV",
+        x=["Supporter Orange"],
+        y=[uav_supporter_orange],
+        marker_color="coral",
+        showlegend=False,
+        text=["UAV"],
+        textposition='outside',
+        textangle=0
+    ))
+    
     bar_fig.update_layout(
         title="Most Reliable Path: Performer and Supporter Capacities",
         xaxis_title="Role and Capacity",
         yaxis_title="Number of Tasks",
-        barmode='stack',
-        bargap=0.3,
+        barmode='group',
+        bargap=0.15,
+        bargroupgap=0.1,
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False
     )
 
-    return workflow_fig, bar_fig_whole_scenario, bar_fig
+    # --- Allocation Type Analysis ---
+    single_allocation_independent = 0
+    multiple_allocation_independent = 0
+    interdependent = 0
+
+    for idx, row in df_bar.iterrows():
+        # Get all performer and supporter values
+        human_star = str(row.get("Human*", "") or "").strip().lower()
+        ugv_star = str(row.get("UGV*", "") or "").strip().lower()
+        uav_star = str(row.get("UAV*", "") or "").strip().lower()
+        human = str(row.get("Human", "") or "").strip().lower()
+        ugv = str(row.get("UGV", "") or "").strip().lower()
+        uav = str(row.get("UAV", "") or "").strip().lower()
+
+        VALID_COLORS = {"red", "yellow", "green", "orange"}
+        
+        # Count valid performers (not red)
+        performers = []
+        if human_star in VALID_COLORS and human_star != "red":
+            performers.append("Human*")
+        if ugv_star in VALID_COLORS and ugv_star != "red":
+            performers.append("UGV*")
+        if uav_star in VALID_COLORS and uav_star != "red":
+            performers.append("UAV*")
+        
+        # Count valid supporters (not red)
+        supporters = []
+        if human in VALID_COLORS and human != "red":
+            supporters.append("Human")
+        if ugv in VALID_COLORS and ugv != "red":
+            supporters.append("UGV")
+        if uav in VALID_COLORS and uav != "red":
+            supporters.append("UAV")
+        
+        # Determine task type
+        if len(supporters) > 0:
+            # Has support available = interdependent
+            interdependent += 1
+        elif len(performers) == 1:
+            # Only one performer, no support = single allocation independent
+            single_allocation_independent += 1
+        elif len(performers) > 1:
+            # Multiple performers, no support = multiple allocation independent
+            multiple_allocation_independent += 1
+    
+    total_tasks = len(df_bar)
+    
+    # Create horizontal stacked bar chart
+    allocation_fig = go.Figure()
+    
+    allocation_fig.add_trace(go.Bar(
+        name='Single Allocation Independent',
+        y=['Task Allocation Types'],
+        x=[single_allocation_independent],
+        orientation='h',
+        marker=dict(color='lightcoral'),
+        text=[f'Single Allocation Independent: {single_allocation_independent} ({single_allocation_independent/total_tasks*100:.1f}%)' if total_tasks > 0 and single_allocation_independent > 0 else ''],
+        textposition='inside',
+        textfont=dict(color='black', size=12),
+        hovertemplate='Single Allocation Independent<br>Count: %{x}<br>Percentage: ' + (f'{single_allocation_independent/total_tasks*100:.1f}%' if total_tasks > 0 else '0%') + '<extra></extra>'
+    ))
+    
+    allocation_fig.add_trace(go.Bar(
+        name='Multiple Allocation Independent',
+        y=['Task Allocation Types'],
+        x=[multiple_allocation_independent],
+        orientation='h',
+        marker=dict(color='lightskyblue'),
+        text=[f'Multiple Allocation Independent: {multiple_allocation_independent} ({multiple_allocation_independent/total_tasks*100:.1f}%)' if total_tasks > 0 and multiple_allocation_independent > 0 else ''],
+        textposition='inside',
+        textfont=dict(color='black', size=12),
+        hovertemplate='Multiple Allocation Independent<br>Count: %{x}<br>Percentage: ' + (f'{multiple_allocation_independent/total_tasks*100:.1f}%' if total_tasks > 0 else '0%') + '<extra></extra>'
+    ))
+    
+    allocation_fig.add_trace(go.Bar(
+        name='Interdependent (Support Available)',
+        y=['Task Allocation Types'],
+        x=[interdependent],
+        orientation='h',
+        marker=dict(color='lightgreen'),
+        text=[f'Interdependent: {interdependent} ({interdependent/total_tasks*100:.1f}%)' if total_tasks > 0 and interdependent > 0 else ''],
+        textposition='inside',
+        textfont=dict(color='black', size=12),
+        hovertemplate='Interdependent (Support Available)<br>Count: %{x}<br>Percentage: ' + (f'{interdependent/total_tasks*100:.1f}%' if total_tasks > 0 else '0%') + '<extra></extra>'
+    ))
+    
+    allocation_fig.update_layout(
+        title="Task Type Distribution",
+        xaxis_title="Number of Tasks",
+        barmode='stack',
+        height=200,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False,
+        margin=dict(l=50, r=50, t=50, b=50)
+    )
+
+    return workflow_fig, bar_fig_whole_scenario, bar_fig, allocation_fig
 
 
 def ensure_all_columns(df, columns):
