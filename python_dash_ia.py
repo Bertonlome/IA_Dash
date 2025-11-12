@@ -702,7 +702,8 @@ app.layout = html.Div([
     html.Div([
         dcc.Graph(id="overall-scenario-bar-chart"),
         dcc.Graph(id="most-reliable-bar-chart"),
-        dcc.Graph(id="allocation-type-bar-chart")
+        dcc.Graph(id="allocation-type-bar-chart"),
+        dcc.Graph(id="agent-autonomy-bar-chart")
     ]),
 
     # Footer with copyright
@@ -724,6 +725,7 @@ app.layout = html.Div([
     Output("overall-scenario-bar-chart", "figure"),
     Output("most-reliable-bar-chart", "figure"),
     Output("allocation-type-bar-chart", "figure"),
+    Output("agent-autonomy-bar-chart", "figure"),
     Input("procedure-dropdown", "value"),
     Input("highlight-selector", "value"),
     Input("responsibility-table", "data")
@@ -731,7 +733,7 @@ app.layout = html.Div([
 def update_graph_and_bar(procedure, highlight_track, data):
     df = pd.DataFrame(data)
     if df.empty:
-        return go.Figure(), go.Figure(), go.Figure(), go.Figure()
+        return go.Figure(), go.Figure(), go.Figure(), go.Figure(), go.Figure()
     if highlight_track == "none":
         highlight_track = None
 
@@ -1508,7 +1510,107 @@ def update_graph_and_bar(procedure, highlight_track, data):
         margin=dict(l=50, r=50, t=50, b=50)
     )
 
-    return workflow_fig, bar_fig_whole_scenario, bar_fig, allocation_fig
+    # --- Agent Autonomy Analysis ---
+    # Track tasks by agent and autonomy across the entire scenario
+    agent_autonomy = {
+        "Human*": {"autonomous": 0, "non_autonomous": 0},
+        "UGV*": {"autonomous": 0, "non_autonomous": 0},
+        "UAV*": {"autonomous": 0, "non_autonomous": 0}
+    }
+    
+    # Process all tasks in sequence (not grouped by procedure)
+    prev_performers = []
+    
+    for idx, row in df_bar.iterrows():
+        # Get current task performers
+        human_star = str(row.get("Human*", "") or "").strip().lower()
+        ugv_star = str(row.get("UGV*", "") or "").strip().lower()
+        uav_star = str(row.get("UAV*", "") or "").strip().lower()
+        
+        VALID_COLORS = {"red", "yellow", "green", "orange"}
+        
+        # Map agents to their colors for this task
+        agent_colors = {
+            "Human*": human_star,
+            "UGV*": ugv_star,
+            "UAV*": uav_star
+        }
+        
+        current_performers = []
+        if human_star in VALID_COLORS and human_star != "red":
+            current_performers.append("Human*")
+        if ugv_star in VALID_COLORS and ugv_star != "red":
+            current_performers.append("UGV*")
+        if uav_star in VALID_COLORS and uav_star != "red":
+            current_performers.append("UAV*")
+        
+        # For each agent that can perform this task
+        for agent in current_performers:
+            # Orange tasks are always non-autonomous
+            if agent_colors[agent] == "orange":
+                agent_autonomy[agent]["non_autonomous"] += 1
+            elif idx == 0 or agent not in prev_performers:
+                # First task or agent couldn't perform previous task
+                agent_autonomy[agent]["non_autonomous"] += 1
+            else:
+                # Agent could also perform previous task = autonomous (green or yellow only)
+                agent_autonomy[agent]["autonomous"] += 1
+        
+        prev_performers = current_performers
+    
+    # Create horizontal stacked bar chart for agent autonomy
+    autonomy_fig = go.Figure()
+    
+    agents = ["Human*", "UGV*", "UAV*"]
+    colors_autonomous = {"Human*": "lightgreen", "UGV*": "lightgreen", "UAV*": "lightgreen"}
+    colors_non_autonomous = {"Human*": "lightcoral", "UGV*": "lightcoral", "UAV*": "lightcoral"}
+    
+    for agent in agents:
+        autonomous = agent_autonomy[agent]["autonomous"]
+        non_autonomous = agent_autonomy[agent]["non_autonomous"]
+        total = autonomous + non_autonomous
+        
+        # Non-autonomous tasks (first section)
+        autonomy_fig.add_trace(go.Bar(
+            name=f'{agent} Non-Autonomous',
+            y=[agent],
+            x=[non_autonomous],
+            orientation='h',
+            marker=dict(color=colors_non_autonomous[agent]),
+            text=[f'Non-Autonomous: {non_autonomous} ({non_autonomous/total*100:.1f}%)' if total > 0 and non_autonomous > 0 else ''],
+            textposition='inside',
+            textfont=dict(color='black', size=11),
+            hovertemplate=f'{agent}<br>Non-Autonomous Tasks: {non_autonomous}<br>Percentage: ' + (f'{non_autonomous/total*100:.1f}%' if total > 0 else '0%') + '<extra></extra>',
+            showlegend=False
+        ))
+        
+        # Autonomous tasks (second section)
+        autonomy_fig.add_trace(go.Bar(
+            name=f'{agent} Autonomous',
+            y=[agent],
+            x=[autonomous],
+            orientation='h',
+            marker=dict(color=colors_autonomous[agent]),
+            text=[f'Autonomous: {autonomous} ({autonomous/total*100:.1f}%)' if total > 0 and autonomous > 0 else ''],
+            textposition='inside',
+            textfont=dict(color='black', size=11),
+            hovertemplate=f'{agent}<br>Autonomous Tasks: {autonomous}<br>Percentage: ' + (f'{autonomous/total*100:.1f}%' if total > 0 else '0%') + '<extra></extra>',
+            showlegend=False
+        ))
+    
+    autonomy_fig.update_layout(
+        title="Agent Autonomy: Task Continuity Across Entire Scenario",
+        xaxis_title="Number of Tasks",
+        yaxis_title="Agent",
+        barmode='stack',
+        height=300,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False,
+        margin=dict(l=100, r=50, t=50, b=50)
+    )
+
+    return workflow_fig, bar_fig_whole_scenario, bar_fig, allocation_fig, autonomy_fig
 
 
 def ensure_all_columns(df, columns):
