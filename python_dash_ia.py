@@ -1507,7 +1507,19 @@ def update_graph_and_bar(procedure, highlight_track, data):
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False,
-        margin=dict(l=50, r=50, t=50, b=50)
+        margin=dict(l=50, r=50, t=50, b=100),
+        annotations = [
+            dict(
+                text= "*Single Allocation Independent: Only one agent can perform the task no support available<br>*Multiple Allocation Independent: Multiple agents can perform the task no support available<br>*Interdependent: At least one agent can perform the task with opportunistic or required support from another agent",
+                xref="paper",
+                yref="paper",
+                x=0,
+                y=-1.5,
+                showarrow=False,
+                align="left",
+                font=dict(size=12)
+            )
+        ]
     )
 
     # --- Agent Autonomy Analysis ---
@@ -1599,7 +1611,7 @@ def update_graph_and_bar(procedure, highlight_track, data):
         ))
     
     autonomy_fig.update_layout(
-        title="Agent Autonomy: Task Continuity Across Entire Scenario",
+        title="Agent Autonomy: Task Continuity",
         xaxis_title="Number of Tasks",
         yaxis_title="Agent",
         barmode='stack',
@@ -1607,7 +1619,19 @@ def update_graph_and_bar(procedure, highlight_track, data):
         plot_bgcolor='white',
         paper_bgcolor='white',
         showlegend=False,
-        margin=dict(l=100, r=50, t=50, b=50)
+        margin=dict(l=100, r=50, t=50, b=50),
+        annotations = [
+            dict(
+                text= "*A task is considered autonomous for an agent if that agent could also perform the previous task in sequence and it did not require approval from other agents (orange)",
+                xref="paper",
+                yref="paper",
+                x=0,
+                y=-0.2,
+                showarrow=False,
+                align="left",
+                font=dict(size=12)
+            )
+        ]
     )
 
     return workflow_fig, bar_fig_whole_scenario, bar_fig, allocation_fig, autonomy_fig
