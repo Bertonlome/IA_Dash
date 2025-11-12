@@ -1643,6 +1643,31 @@ def ensure_all_columns(df, columns):
             df[col] = ""
     return df
 
+def normalize_and_validate_colors(df):
+    """
+    Normalize color values to lowercase and validate them.
+    Returns tuple: (normalized_df, error_messages_list)
+    """
+    color_columns = ["Human*", "UGV", "UAV", "UGV*", "UAV*", "Human"]
+    valid_colors = {"red", "yellow", "green", "orange", ""}
+    errors = []
+    
+    for col in color_columns:
+        if col in df.columns:
+            for idx, value in df[col].items():
+                if pd.notna(value):
+                    # Convert to lowercase string
+                    normalized = str(value).strip().lower()
+                    df.at[idx, col] = normalized
+                    
+                    # Check if valid
+                    if normalized and normalized not in valid_colors:
+                        errors.append(f"Row {idx + 1}, Column '{col}': Invalid color '{value}' (expected: red, yellow, green, orange, or empty)")
+                else:
+                    df.at[idx, col] = ""
+    
+    return df, errors
+
 @app.callback(
     Output("table-wrapper", "children"),
     Output("save-confirmation", "children"),
@@ -1683,7 +1708,17 @@ def handle_table(data, save_clicks, upload_contents, add_row_clicks, copy_clicks
         try:
             df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
             df = ensure_all_columns(df, [col["id"] for col in columns])
-            save_message = f"✅ Loaded {upload_filename}"
+            
+            # Normalize colors to lowercase and validate
+            df, validation_errors = normalize_and_validate_colors(df)
+            
+            if validation_errors:
+                error_msg = "⚠️ File loaded with warnings:\n" + "\n".join(validation_errors[:5])
+                if len(validation_errors) > 5:
+                    error_msg += f"\n... and {len(validation_errors) - 5} more errors"
+                save_message = error_msg
+            else:
+                save_message = f"✅ Loaded {upload_filename}"
         except Exception as e:
             return dash.no_update, f"⚠️ Error loading file: {str(e)}", None
 
