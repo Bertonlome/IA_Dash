@@ -1026,7 +1026,7 @@ def update_graph_and_bar(procedure, highlight_track, data):
     ))
     
     bar_fig_whole_scenario.update_layout(
-        title="Performer and Supporter Capacities in Mixed Initiative",
+        title="Performer and Supporter Capacities",
         xaxis_title="Role and Capacity",
         yaxis_title="Number of Tasks",
         barmode='group',
