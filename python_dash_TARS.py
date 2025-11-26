@@ -20,7 +20,7 @@ def create_navbar(current_pathname="/"):
         ], style={"textAlign": "left", "marginBottom": "20px"}),
     ])
 
-DATA_FILE = "IA_updated.csv"
+DATA_FILE = "./V4/IA_V4.csv"
 if os.path.exists(DATA_FILE):
     df = pd.read_csv(DATA_FILE)
 
@@ -598,7 +598,9 @@ def interdependence_analysis_page():
         html.Div([
             dcc.Graph(id="bar-chart-whole-scenario"),
             dcc.Graph(id="most-reliable-bar-chart"),
-            dcc.Graph(id="spo_baseline-bar-chart")
+            dcc.Graph(id="spo_baseline-bar-chart"),
+            dcc.Graph(id="allocation-type-bar-chart"),
+            dcc.Graph(id="agent-autonomy-bar-chart")
         ]),
 
         # Footer with copyright
@@ -717,6 +719,8 @@ def display_page(pathname):
     Output("bar-chart-whole-scenario", "figure"),
     Output("most-reliable-bar-chart", "figure"),
     Output("spo_baseline-bar-chart", "figure"),
+    Output("allocation-type-bar-chart", "figure"),
+    Output("agent-autonomy-bar-chart", "figure"),
     Input("procedure-dropdown", "value"),
     Input("highlight-selector", "value"),
     State("responsibility-table", "data")
@@ -1017,7 +1021,194 @@ def update_graph_and_bar(procedure, highlight_track, data):
         paper_bgcolor='white',
         showlegend=False
     )
-    return workflow_fig, bar_fig_whole_scenario, bar_fig, bar_fig_spo
+
+    # --- Allocation Type Analysis ---
+    single_allocation_independent = 0
+    multiple_allocation_independent = 0
+    interdependent = 0
+
+    for idx, row in df_bar.iterrows():
+        # Get all performer and supporter values
+        human_star = str(row.get("Human*", "") or "").strip().lower()
+        tars_star = str(row.get("TARS*", "") or "").strip().lower()
+        human = str(row.get("Human", "") or "").strip().lower()
+        tars = str(row.get("TARS", "") or "").strip().lower()
+
+        VALID_COLORS = {"red", "yellow", "green", "orange"}
+        
+        # Count valid performers (not red)
+        performers = []
+        if human_star in VALID_COLORS and human_star != "red":
+            performers.append("Human*")
+        if tars_star in VALID_COLORS and tars_star != "red":
+            performers.append("TARS*")
+        
+        # Count valid supporters (not red)
+        supporters = []
+        if human in VALID_COLORS and human != "red":
+            supporters.append("Human")
+        if tars in VALID_COLORS and tars != "red":
+            supporters.append("TARS")
+        
+        # Determine task type
+        if len(supporters) > 0:
+            # Has support available = interdependent
+            interdependent += 1
+        elif len(performers) == 1:
+            # Only one performer, no support = single allocation independent
+            single_allocation_independent += 1
+        elif len(performers) > 1:
+            # Multiple performers, no support = multiple allocation independent
+            multiple_allocation_independent += 1
+    
+    total_tasks = len(df_bar)
+    
+    # Create horizontal stacked bar chart
+    allocation_fig = go.Figure()
+    
+    allocation_fig.add_trace(go.Bar(
+        name='Single Allocation Independent',
+        y=['Task Allocation Types'],
+        x=[single_allocation_independent],
+        orientation='h',
+        marker=dict(color='lightcoral'),
+        text=[f'Single Allocation Independent: {single_allocation_independent} ({single_allocation_independent/total_tasks*100:.1f}%)' if total_tasks > 0 and single_allocation_independent > 0 else ''],
+        textposition='inside',
+        textfont=dict(color='black', size=12),
+        hovertemplate='Single Allocation Independent<br>Count: %{x}<br>Percentage: ' + (f'{single_allocation_independent/total_tasks*100:.1f}%' if total_tasks > 0 else '0%') + '<extra></extra>'
+    ))
+    
+    allocation_fig.add_trace(go.Bar(
+        name='Multiple Allocation Independent',
+        y=['Task Allocation Types'],
+        x=[multiple_allocation_independent],
+        orientation='h',
+        marker=dict(color='lightskyblue'),
+        text=[f'Multiple Allocation Independent: {multiple_allocation_independent} ({multiple_allocation_independent/total_tasks*100:.1f}%)' if total_tasks > 0 and multiple_allocation_independent > 0 else ''],
+        textposition='inside',
+        textfont=dict(color='black', size=12),
+        hovertemplate='Multiple Allocation Independent<br>Count: %{x}<br>Percentage: ' + (f'{multiple_allocation_independent/total_tasks*100:.1f}%' if total_tasks > 0 else '0%') + '<extra></extra>'
+    ))
+    
+    allocation_fig.add_trace(go.Bar(
+        name='Interdependent (Support Available)',
+        y=['Task Allocation Types'],
+        x=[interdependent],
+        orientation='h',
+        marker=dict(color='lightgreen'),
+        text=[f'Interdependent: {interdependent} ({interdependent/total_tasks*100:.1f}%)' if total_tasks > 0 and interdependent > 0 else ''],
+        textposition='inside',
+        textfont=dict(color='black', size=12),
+        hovertemplate='Interdependent (Support Available)<br>Count: %{x}<br>Percentage: ' + (f'{interdependent/total_tasks*100:.1f}%' if total_tasks > 0 else '0%') + '<extra></extra>'
+    ))
+    
+    allocation_fig.update_layout(
+        title="Task Type Distribution",
+        xaxis_title="Number of Tasks",
+        barmode='stack',
+        height=200,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False,
+        margin=dict(l=50, r=50, t=50, b=50)
+    )
+
+    # --- Agent Autonomy Analysis ---
+    # Track tasks by agent and autonomy across the entire scenario
+    agent_autonomy = {
+        "Human*": {"autonomous": 0, "non_autonomous": 0},
+        "TARS*": {"autonomous": 0, "non_autonomous": 0}
+    }
+    
+    # Process all tasks in sequence (not grouped by procedure)
+    prev_performers = []
+    
+    for idx, row in df_bar.iterrows():
+        # Get current task performers
+        human_star = str(row.get("Human*", "") or "").strip().lower()
+        tars_star = str(row.get("TARS*", "") or "").strip().lower()
+        
+        VALID_COLORS = {"red", "yellow", "green", "orange"}
+        
+        # Map agents to their colors for this task
+        agent_colors = {
+            "Human*": human_star,
+            "TARS*": tars_star
+        }
+        
+        current_performers = []
+        if human_star in VALID_COLORS and human_star != "red":
+            current_performers.append("Human*")
+        if tars_star in VALID_COLORS and tars_star != "red":
+            current_performers.append("TARS*")
+        
+        # For each agent that can perform this task
+        for agent in current_performers:
+            # Orange tasks are always non-autonomous
+            if agent_colors[agent] == "orange":
+                agent_autonomy[agent]["non_autonomous"] += 1
+            elif idx == 0 or agent not in prev_performers:
+                # First task or agent couldn't perform previous task
+                agent_autonomy[agent]["non_autonomous"] += 1
+            else:
+                # Agent could also perform previous task = autonomous (green or yellow only)
+                agent_autonomy[agent]["autonomous"] += 1
+        
+        prev_performers = current_performers
+    
+    # Create horizontal stacked bar chart for agent autonomy
+    autonomy_fig = go.Figure()
+    
+    agents = ["Human*", "TARS*"]
+    colors_autonomous = {"Human*": "lightgreen", "TARS*": "lightgreen"}
+    colors_non_autonomous = {"Human*": "lightcoral", "TARS*": "lightcoral"}
+    
+    for agent in agents:
+        autonomous = agent_autonomy[agent]["autonomous"]
+        non_autonomous = agent_autonomy[agent]["non_autonomous"]
+        total = autonomous + non_autonomous
+        
+        # Non-autonomous tasks (first section)
+        autonomy_fig.add_trace(go.Bar(
+            name=f'{agent} Non-Autonomous',
+            y=[agent],
+            x=[non_autonomous],
+            orientation='h',
+            marker=dict(color=colors_non_autonomous[agent]),
+            text=[f'Non-Autonomous: {non_autonomous} ({non_autonomous/total*100:.1f}%)' if total > 0 and non_autonomous > 0 else ''],
+            textposition='inside',
+            textfont=dict(color='black', size=11),
+            hovertemplate=f'{agent}<br>Non-Autonomous Tasks: {non_autonomous}<br>Percentage: ' + (f'{non_autonomous/total*100:.1f}%' if total > 0 else '0%') + '<extra></extra>',
+            showlegend=False
+        ))
+        
+        # Autonomous tasks (second section)
+        autonomy_fig.add_trace(go.Bar(
+            name=f'{agent} Autonomous',
+            y=[agent],
+            x=[autonomous],
+            orientation='h',
+            marker=dict(color=colors_autonomous[agent]),
+            text=[f'Autonomous: {autonomous} ({autonomous/total*100:.1f}%)' if total > 0 and autonomous > 0 else ''],
+            textposition='inside',
+            textfont=dict(color='black', size=11),
+            hovertemplate=f'{agent}<br>Autonomous Tasks: {autonomous}<br>Percentage: ' + (f'{autonomous/total*100:.1f}%' if total > 0 else '0%') + '<extra></extra>',
+            showlegend=False
+        ))
+    
+    autonomy_fig.update_layout(
+        title="Agent Autonomy: Task Continuity Across Entire Scenario",
+        xaxis_title="Number of Tasks",
+        yaxis_title="Agent",
+        barmode='stack',
+        height=300,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False,
+        margin=dict(l=100, r=50, t=50, b=50)
+    )
+
+    return workflow_fig, bar_fig_whole_scenario, bar_fig, bar_fig_spo, allocation_fig, autonomy_fig
 
 
 @app.callback(
