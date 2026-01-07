@@ -20,7 +20,7 @@ def create_navbar(current_pathname="/"):
         ], style={"textAlign": "left", "marginBottom": "20px"}),
     ])
 
-DATA_FILE = "./V4/IA_V4.csv"
+DATA_FILE = "./V6/IA_V6.csv"
 if os.path.exists(DATA_FILE):
     df = pd.read_csv(DATA_FILE)
 
@@ -354,16 +354,31 @@ def build_performers_only_figures(df, highlight_track=None):
                 ))
 
         # Add dashed horizontal lines for support relationships
+        # Group arrows by task to detect overlaps
+        arrows_by_task = {}
         for arrow in grey_to_black_arrows:
-            is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
             if arrow.get("is_support"):
-                # Draw dashed line from start_agent to end_agent
+                task = arrow["task"]
+                if task not in arrows_by_task:
+                    arrows_by_task[task] = []
+                arrows_by_task[task].append(arrow)
+        
+        for task, task_arrows in arrows_by_task.items():
+            # If there are 2 arrows at the same task, offset them vertically
+            if len(task_arrows) == 2:
+                offsets = [-0.08, 0.08]  # Small vertical offset
+            else:
+                offsets = [0] * len(task_arrows)
+            
+            for arrow, offset in zip(task_arrows, offsets):
+                is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
+                # Draw dashed line from start_agent to end_agent with offset
                 fig.add_shape(
                     type="line",
                     x0=agent_pos[arrow["start_agent"]],
-                    y0=arrow["task"],
+                    y0=arrow["task"] + offset,
                     x1=agent_pos[arrow["end_agent"]],
-                    y1=arrow["task"],
+                    y1=arrow["task"] + offset,
                     line=dict(
                         color="crimson" if is_highlighted else "black",
                         width=4 if is_highlighted else 2,
@@ -391,7 +406,8 @@ def build_performers_only_figures(df, highlight_track=None):
                 arrowwidth=4 if is_highlighted else 2,
                 arrowcolor="crimson" if is_highlighted else "black",
                 opacity=0.9,
-                standoff=15  # Stop arrow at circle edge
+                standoff=18,  # Stop arrow at end circle edge (circle radius=15, add margin)
+                startstandoff=18  # Start arrow from start circle edge
             )
 
         fig.update_layout(
@@ -611,16 +627,31 @@ def build_performers_only_combined_figure(df, highlight_track=None):
             ))
 
     # Add dashed horizontal lines for support relationships
+    # Group arrows by task to detect overlaps
+    arrows_by_task = {}
     for arrow in grey_to_black_arrows:
-        is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
         if arrow.get("is_support"):
-            # Draw dashed line from start_agent to end_agent
+            task = arrow["task"]
+            if task not in arrows_by_task:
+                arrows_by_task[task] = []
+            arrows_by_task[task].append(arrow)
+    
+    for task, task_arrows in arrows_by_task.items():
+        # If there are 2 arrows at the same task, offset them vertically
+        if len(task_arrows) == 2:
+            offsets = [-0.08, 0.08]  # Small vertical offset
+        else:
+            offsets = [0] * len(task_arrows)
+        
+        for arrow, offset in zip(task_arrows, offsets):
+            is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
+            # Draw dashed line from start_agent to end_agent with offset
             fig.add_shape(
                 type="line",
                 x0=agent_pos[arrow["start_agent"]],
-                y0=arrow["task"],
+                y0=arrow["task"] + offset,
                 x1=agent_pos[arrow["end_agent"]],
-                y1=arrow["task"],
+                y1=arrow["task"] + offset,
                 line=dict(
                     color="crimson" if is_highlighted else "black",
                     width=4 if is_highlighted else 2,
@@ -1655,6 +1686,23 @@ def update_graph_and_bar(procedure, highlight_track, view_mode, data):
     prev_performers = []
     
     for idx, row in df_bar.iterrows():
+        # Skip the first task (task 0) as there's no previous task to compare
+        if idx == 0:
+            # Get current task performers for next iteration
+            human_star = str(row.get("Human*", "") or "").strip().lower()
+            tars_star = str(row.get("TARS*", "") or "").strip().lower()
+            
+            VALID_COLORS = {"red", "yellow", "green", "orange"}
+            
+            current_performers = []
+            if human_star in VALID_COLORS and human_star != "red":
+                current_performers.append("Human*")
+            if tars_star in VALID_COLORS and tars_star != "red":
+                current_performers.append("TARS*")
+            
+            prev_performers = current_performers
+            continue
+        
         # Get current task performers
         human_star = str(row.get("Human*", "") or "").strip().lower()
         tars_star = str(row.get("TARS*", "") or "").strip().lower()
@@ -1678,8 +1726,8 @@ def update_graph_and_bar(procedure, highlight_track, view_mode, data):
             # Orange tasks are always non-autonomous
             if agent_colors[agent] == "orange":
                 agent_autonomy[agent]["non_autonomous"] += 1
-            elif idx == 0 or agent not in prev_performers:
-                # First task or agent couldn't perform previous task
+            elif agent not in prev_performers:
+                # Agent couldn't perform previous task
                 agent_autonomy[agent]["non_autonomous"] += 1
             else:
                 # Agent could also perform previous task = autonomous (green or yellow only)

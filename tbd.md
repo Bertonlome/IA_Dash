@@ -1,9 +1,6 @@
 # TBD Todo Lists
+[ ] Compute Automation Proportion according to Liu & Kaber (2025)
 
-- [ ] Flashcard for **OPD** requirements
-- [ ] Maybe integrate what-ifs scenario in predictability
-- [ ] Do the IA for HAT game
-- [ ] OPD generation revised for new flashcard of OPD requirements
 
 # Coactive Design : Designing Support for Interdependence in Human-Robot Teamwork Johnson PhD. Thesis
 

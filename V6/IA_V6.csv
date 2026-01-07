@@ -1,0 +1,82 @@
+Procedure,Classification,Type,Category,Task Object,Value,Human*,TARS,TARS*,Human,Observability,Predictability,Directability
+BEFORE TAKEOFF,NORM,Checklist,ATC,Takeoff clearance,CONFIRM,yellow,yellow,yellow,yellow,TARS displays pilot's checklist progress; Pilotconfirms ATC clearance status.,Pilot anticipates TARS's checklist next steps.,Pilot can command TARS to recheck an item.
+BEFORE TAKEOFF,NORM,Checklist,Switch / Lever,Pitot-Static Switch,PITOT-STATIC,green,yellow,green,,TARS must display sensed pitot-static status to pilot.,,
+BEFORE TAKEOFF,NORM,Checklist,Switch / Lever,ENGINE ANTI-ICE Switches,AS REQUIRED,yellow,yellow,red,,TARS displays sensed engine anti-ice status changes to pilot and requirement.,,
+BEFORE TAKEOFF,NORM,Checklist,Switch / Lever,WINDSHIELD ANTI-ICE Switches,AS REQUIRED,yellow,yellow,red,,TARS displays windshield anti-ice status and requirement,TARS alerts pilot if anti-ice status deviates from requirement.,
+BEFORE TAKEOFF,NORM,Checklist,Switch / Lever,PAX SAFETY Switch,PAX SAFETY,green,green,green,,TARS display PAX SAFETY switch status to pilot.,,
+BEFORE TAKEOFF,NORM,Checklist,Switch / Lever,LANDING Light Switch,AS DESIRED,green,green,red,,TARS must display sensed light switch status.,Pilot expects TARS to suggest if it is suggested based on time of day.,
+BEFORE TAKEOFF,NORM,Checklist,Switch / Lever,ANTI-COLL Light Switch,ON,green,green,green,,TARS display ANTI-COLL light switch status to pilot.,Pilot expects TARS to alert if ANTI-COLL light switch is off.,
+BEFORE TAKEOFF,NORM,Checklist,Parameter Check,EICAS,CHECKED,yellow,red,red,,,,
+LINE-UP AND HOLD,NORM,SOP,Environment Check,Winds,CHECK,green,green,yellow,yellow,TARS displays and announce available wind data and status. Pilot can enrich by crosschecking with visual information,,Both can perform in parallel and crosscheck
+LINE-UP AND HOLD,NORM,SOP,Autopilot Mgmt,Select Altitude,PRESET AS CLEARED,yellow,yellow,yellow,yellow,,,
+TAKEOFF,NORM,Checklist,System Check,CAS,CHECK CLEAR,yellow,red,red,,,,
+TAKEOFF,NORM,Checklist,Flight Control,THROTTLES,TO Detent,green,green,red,,The performer must callout the action before executing it and after execution, ,
+TAKEOFF,NORM,Checklist,System Check,FADEC bug,CHECK TO,yellow,yellow,green,,TARS displays FADEC status changes to pilot.,,TARS direct human to RTO if FADEC fails
+TAKEOFF,NORM,Checklist,System Check,Engine spool,CHECK EVEN,yellow,yellow,green,,Human sees TARS status on engine checks; TARS sees human's manual inputs.,,TARS direct human to RTO if engine spool is not even
+TAKEOFF,NORM,SOP,Callout,"""Airspeed's alive""",ANNOUNCE,yellow,green,green,,TARS must display airspeed. Pilot must be able to hear announcement,"Pilot must anticipate TARS's ""Airspeed's alive"" announcement timing.",
+TAKEOFF,NORM,SOP,Callout,"""70 kts""",ANNOUNCE,yellow,green,green,,"TARS must display airspeed; Human must hear TARS' ""70 kts"" announcement.","Human expects TARS to announce ""70 kts"" at correct speed.",
+TAKEOFF,NORM,SOP,Callout,"""V1""",ANNOUNCE,yellow,green,green,,"TARS must display airspeed; Human must hear TARS' ""V1"" announcement.","TARS announces ""V1"" timing based on takeoff speed and runway conditions.",
+TAKEOFF,NORM,SOP,Callout,"""Rotate""",ANNOUNCE,yellow,green,green,,"TARS must display airspeed; Human must hear TARS' ""ROTATE"" announcement.","TARS announces ""ROTATE"" timing based on takeoff speed and runway conditions.",
+TAKEOFF,NORM,Checklist,Flight Control,Pitch,MAINTAIN 10°,yellow,yellow,red,,,,
+TAKEOFF,NORM,Checklist,Parameter Check,Climb rate,CHECK POSITIVE,yellow,,green,,The performer must announce the result of the check and the subsequent action,,
+TAKEOFF,NORM,Checklist,Switch / Lever,LANDING GEAR,UP,green,,red,,TARS confirms pilot's gear action.,,
+ENG FAILURE DURING TAKEOFF,EMER,Memory Item,Navigation,Climb ,TO A SAFE ALTITUDE,yellow,yellow,red,,TARS displays agreed safe altitude (1500ft),,
+ENG FAILURE DURING TAKEOFF,EMER,SOP,Autopilot Mgmt,Flight Director,SET TO MODE,yellow,green,green,,TARS displays current flight director mode and status changes to pilot.,TARS communicates intended flight director mode changes before execution.,Pilot can override or confirm TARS's flight director mode changes via voice command.
+ENG FAILURE DURING TAKEOFF,EMER,Memory Item,Flight Control,Pitch,MAINTAIN 10°,yellow,yellow,red,,,,
+ENG FAILURE DURING TAKEOFF,EMER,Memory Item,Switch / Lever,LANDING GEAR,UP,yellow,yellow,red,,TARS displays gear status and alerts pilot of any anomalies.,,
+ENG FAILURE DURING TAKEOFF,EMER,SOP,Parameter Check,Airspeed,CHECK V2,yellow,yellow,green,,TARS displays current airspeed and V2 status to pilot.,,
+ENG FAILURE DURING TAKEOFF,EMER,SOP,Flight Control,Rudder,TRIM,yellow,green,orange,orange,"TARS displays rudder trim status. TARS display its own adjustments, TARS announce each trim input",TARS announces intended rudder trim adjustments before execution. TARS always execute the equivalent of a single input on the electric trim,Pilot can override or adjust TARS rudder trim actions via voice command.
+ENG FAILURE DURING TAKEOFF,EMER,SOP,Autopilot Mgmt,Autopilot,SET SPD MODE,green,green,green,,TARS must display autopilot mode changes to the pilot.,TARS should indicate upcoming autopilot adjustments.,Pilot can override TARS autopilot settings via voice command.
+ENG FAILURE DURING TAKEOFF,EMER,SOP,Autopilot Mgmt,Autopilot,SET HDG MODE,green,green,green,,Human sees TARS autopilot mode changes.,Human anticipates TARS heading adjustments.,Human commands TARS via voice for heading changes.
+ENG FAILURE DURING TAKEOFF,EMER,SOP,Autopilot Mgmt,Autopilot,ENGAGE,yellow,green,green,yellow,Performer must callout the action. TARS displays autopilot status changes to pilot.,Pilot anticipates TARS's autopilot engagement sequence.,Pilot can override TARS's autopilot actions via command.
+ENG FAILURE DURING TAKEOFF,EMER,SOP,Callout,Alarm,ANNOUNCE,yellow,yellow,green,,Human must see TARS's alarm status.,,Human can confirm TARS's alarm callout via voice command.
+ENG FAILURE DURING TAKEOFF,EMER,Memory Item,Parameter Check,Check,SAFE ALTITUDE REACHED,yellow,yellow,green,,Performer must callout safe altitude reached,,
+ENGINE FIRE,EMER,Memory Item,Switch / Lever,Throttle (affected engine),IDLE,yellow,yellow,red,,TARS monitors pilot's throttle actions. TARS can help announce the side of the thrust lever and the action to conduct. The pilot must callout the action,,
+ENGINE FIRE,EMER,SOP,Switch / Lever,Chrono,START,yellow,,green,,"The performer must callout the action, TARS must display the chrono status",HUMAN should know when the timer is set off.,Pilot can override or redirect TARS actions via voice commands.
+ENGINE FIRE,EMER,Memory Item,System Check,Engine FIRE LIGHT,CHECK ON AFTER 15s,yellow,yellow,red,,TARS must display the chrono status and engine fire light status,,
+ENGINE FIRE,EMER,Memory Item,Switch / Lever,Illuminated ENGINE FIRE Switch,LIFT COVER AND PUSH,green,red,red,,TARS monitors pilot's actions. HUMAN must callout the action,,
+ENG FAILURE DURING TAKEOFF,EMER,Memory Item,Parameter Check,Altitude,CHECK 1500ft AGL,yellow,yellow,green,,TARS displays current altitude.,,
+ENG FAILURE DURING TAKEOFF,EMER,Memory Item,Parameter Check,Airspeed,CHECK V2+10,yellow,yellow,green,,TARS displays airspeed and V2+10 status to pilot.,,
+ENG FAILURE DURING TAKEOFF,EMER,Memory Item,Environment Check,Obstacles,CHECK Clear,yellow,red,red,,,,
+ENG FAILURE DURING TAKEOFF,EMER,Memory item,Switch / Lever,FLAP Handle,UP,yellow,yellow,red,,TARS can support by calling out the action.,,
+ENG FAILURE DURING TAKEOFF,EMER,Memory item,Flight Control,Accelerate,TO V_ENR,yellow,yellow,red,,,,
+ENG FAILURE DURING TAKEOFF,EMER,SOP,ATC Communication,ATC,CONTACT,yellow,yellow,orange,orange,TARS must display ATC communication status to the pilot.,Pilot must anticipate TARS's next ATC message.,Pilot can override TARS's ATC communication with voice command.
+ENG FAILURE DURING TAKEOFF,EMER,SOP,ATC Communication,ATC,READBACK,yellow,yellow,yellow,yellow,,,
+ENGINE FIRE,EMER,SOP,Checklist Mgmt,Checklist,ORDER START,yellow,yellow,green,,TARS displays current checklist step and expected worklow. ,TARS anticipates pilot's checklist step confirmations; pilot expects TARS to announce next steps.,Pilot can override or modify TARS actions via voice command. pilot confirms checklist initiation.
+ENGINE FIRE,EMER,Checklist,Other,Immediate Action Item,CHECK DONE,green,green,red,,Pilot confirms,,
+ENGINE FIRE,EMER,Checklist,Switch / Lever,Throttle (affected engine),CUTOFF,yellow,yellow,red,,TARS can support the pilot by calling out the action,,
+ENGINE FIRE,EMER,Checklist,Switch / Lever,FUEL BOOST Switch (affected side),OFF,yellow,yellow,red,,TARS can support the pilot by calling out the action,,
+ENGINE FIRE,EMER,Checklist,Switch / Lever,FUEL BOOST Switch (affected side),NORM,yellow,yellow,red,,TARS can support the pilot by calling out the action,,
+ENGINE FIRE,EMER,Checklist,System Check,Engine FIRE LIGHT,CHECK ON AFTER 30s,yellow,yellow,green,,TARS must display checklist progress and status to the pilot.,,
+ENGINE FIRE,EMER,Checklist,Switch / Lever,Illuminated BOTTLE ARMED Switch,PUSH,green,green,red,,The pilot must callout the action,,
+ENGINE FIRE,EMER,Checklist,Switch / Lever,Rotary Test,FIRE WARN,green,green,red,,TARS monitors pilot's actions.,,
+ENGINE FIRE,EMER,Checklist,System Check,Engine fire lights,Check both illuminate,green,green,red,,TARS monitors pilot's actions.,,
+ENGINE FIRE,EMER,Checklist,Checklist Mgmt,Next Checklist,ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,green,green,green,,TARS displays checklist progress; pilot confirms task completion.,TARS anticipates pilot's checklist initiation; ,Pilot can postpone the execution
+DECLARE PANPAN,EMER,SOP,ATC Communication,ATC,ANNOUNCE PANPAN AND REQUEST VECTOR,yellow,green,orange,orange,TARS must display ATC communication message to the pilot.,Pilot must anticipate TARS's emergency declaration timing.,Pilot can override or confirm TARS's emergency declaration.
+DECLARE PANPAN,EMER,SOP,ATC Communication,ATC,READBACK,yellow,yellow,yellow,yellow,,,
+DECLARE PANPAN,EMER,SOP,Navigation,Heading,SET ACCORDINGLY,yellow,yellow,orange,orange,,,
+DECLARE PANPAN,EMER,SOP,Navigation,Altitude,SET ACCORDINGLY,yellow,yellow,orange,orange,,,
+AFTER TAKEOFF,NORM,SOP,Checklist Mgmt,Checklist,ORDER START,yellow,yellow,green,,TARS displays checklist progress and status updates to pilot.,Pilot anticipates TARS's checklist sequence and timing.,Pilot can postpone checklist execution.
+AFTER TAKEOFF,NORM,Checklist,Switch / Lever,LANDING GEAR Handle,UP,green,green,red,,TARS must display gear status.,,
+AFTER TAKEOFF,NORM,Checklist,Parameter Check,Airspeed,CHECK V2 + 10,yellow,yellow,green,,Human sees TARS' airspeed checks and status updates.,,
+AFTER TAKEOFF,NORM,Checklist,Environment Check,Obstacles,CHECK CLEAR,yellow,red,red,,,,
+AFTER TAKEOFF,NORM,Checklist,Switch / Lever,FLAP Handle,UP,green,green,red,,TARS must display flap status.,Human must anticipate TARS's verbal reminders for flap retraction.,
+AFTER TAKEOFF,NORM,Checklist,Switch / Lever,THROTTLES,CLB Detent,green,green,red,,TARS must display throttle detent status to pilot.,,
+AFTER TAKEOFF,NORM,Checklist,Switch / Lever,Yaw Damper,AS DESIRED,yellow,green,orange,orange,TARS displays yaw damper status changes to pilot.,TARS anticipates pilot's yaw damper adjustments.,Pilot commands TARS to adjust yaw damper settings.
+AFTER TAKEOFF,NORM,Checklist,Switch / Lever,Anti-Ice/Deice Systems,AS REQUIRED,yellow,green,red,,TARS displays anti-ice system status; pilot confirms visual indicators.,TARS alerts pilot of potential anti-ice activation needs.,
+AFTER TAKEOFF,NORM,Checklist,Switch / Lever,PAX SAFETY Switch,AS REQUIRED,yellow,green,red,,TARS must display PAX SAFETY switch status to pilot and requirement.,,
+AFTER TAKEOFF,NORM,Checklist,Switch / Lever,LANDING Light Switch,AS REQUIRED,yellow,green,red,,TARS must display landing light status to the pilot and requirement.,Pilot must anticipate TARS's reminders for landing light status.,
+AFTER TAKEOFF,NORM,Checklist,System Check,Pressurization,CHECK,green,green,green,,TARS displays pressurization status to pilot.,TARS anticipates pilot's pressurization check initiation.,
+AFTER TAKEOFF,NORM,Checklist,Switch / Lever,Altimeters (transition altitude),SET STD,green,green,green,,TARS displays altimeter setting changes; pilot confirms via cockpit display.,"TARS anticipates pilot's altimeter setting, pilot anticipates TARS altimeter setting",Pilot commands TARS to set altimeter to standard pressure.
+AFTER TAKEOFF,NORM,Checklist,System Check,Altimeters (transition altitude),CROSSCHECK,green,,red,,Human must confirm crosscheck.,,
+AFTER TAKEOFF,NORM,Checklist,Checklist Mgmt,Checklist,ANNOUNCE COMPLETED,green,,green,,TARS displays checklist status; pilot confirms task completion visually/audibly.,TARS anticipates pilot's checklist completion cues; pilot expects TARS to announce.,
+AFTER TAKEOFF,NORM,Checklist,Checklist Mgmt,Next Checklist,ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,green,green,green,,TARS displays checklist progress.,TARS announces next checklist step before execution.,Pilot can override TARS actions via voice command.
+ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,SOP,Checklist Mgmt,Checklist,ORDER START,yellow,yellow,green,,TARS displays checklist progress.,TARS announces next checklist step before execution.,Pilot can override TARS actions via voice command.
+ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Switch / Lever,Throttle (affected engine),CUTOFF,yellow,yellow,green,,TARS displays engine status and monitor pilot's actions.,,
+ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Other,CAUTION text,READ,green,green,green,,,,Pilot can override TARS actions; TARS prompts pilot for confirmation.
+ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Switch / Lever,GEN Switch (affected side),OFF,green,green,red,,TARS displays GEN switch status and monitor pilot's actions.,,
+ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Switch / Lever,IGNITION switch (affected side),NORM,green,green,red,,TARS displays IGN switch status and monitor pilot's actions.,,
+ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Switch / Lever,Electrical Load,REDUCE as required (<= 300A),yellow,yellow,yellow,yellow,TARS must display current electrical load and recommendations.,Human must anticipate TARS's suggestions for load reduction.,Human can command TARS to suggest specific load reduction actions.
+ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Switch / Lever,Fuel TRANSFER Knob,AS REQUIRED,yellow,yellow,green,,TARS must display fuel transfer status to pilot.,,
+ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,System Check,Verify ENGINE FIRE Switch (affected side),Is pushed,green,green,red,,Human sees TARS status on ENGINE FIRE switch engagement.,Human anticipates TARS will verify switch engagement.,Human can override TARS actions via verbal command.
+ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Checklist Mgmt,Next checklist,SINGLE-ENGINE APPROACH AND LANDING,green,green,green,,TARS displays checklist progress.,TARS anticipates pilot's checklist initiation.,Pilot can command TARS to adjust checklist priorities; TARS suggests checklist priorities.
