@@ -160,8 +160,70 @@ def wrap_text(text, max_width=30):
     return '<br>'.join(textwrap.wrap(text, width=max_width))
 
 
-def build_performers_only_figures(df, highlight_track=None):
+def get_chosen_agent_with_override(row, highlight_track, category_overrides, agent_colors):
+    """
+    Determine the chosen agent for highlighting, considering category overrides.
+    
+    Args:
+        row: DataFrame row containing task data
+        highlight_track: The base highlight strategy
+        category_overrides: Dict mapping category names to "HUMAN" or "TARS"
+        agent_colors: Dict with "HUMAN*" and "TARS*" color values
+    
+    Returns:
+        The chosen agent ("HUMAN*" or "TARS*") or None
+    """
+    category = row.get("Category", "")
+    
+    # Check if there's an override for this category
+    if category in category_overrides:
+        override = category_overrides[category]
+        if override == "TARS":
+            # Use TARS* if available (not red)
+            if agent_colors["TARS*"] in ["green", "yellow", "orange"]:
+                return "TARS*"
+            # Fall back to HUMAN* if TARS* not available
+            elif agent_colors["HUMAN*"] in ["green", "yellow", "orange"]:
+                return "HUMAN*"
+        elif override == "HUMAN":
+            # Use HUMAN* if available (not red)
+            if agent_colors["HUMAN*"] in ["green", "yellow", "orange"]:
+                return "HUMAN*"
+            # Fall back to TARS* if HUMAN* not available
+            elif agent_colors["TARS*"] in ["green", "yellow", "orange"]:
+                return "TARS*"
+        return None
+    
+    # No override - use base strategy
+    if highlight_track in ["human_baseline", "human_full_support"]:
+        # Human performer only
+        if agent_colors["HUMAN*"] in ["green", "yellow", "orange"]:
+            return "HUMAN*"
+    elif highlight_track in ["agent_whenever_possible", "agent_whenever_possible_full_support"]:
+        # TARS* preferred when available
+        if agent_colors["TARS*"] in ["green", "yellow", "orange"]:
+            return "TARS*"
+        elif agent_colors["HUMAN*"] in ["green", "yellow", "orange"]:
+            return "HUMAN*"
+    elif highlight_track == "most_reliable":
+        # Most reliable (green > yellow preference, HUMAN* first)
+        if agent_colors["HUMAN*"] == "green":
+            return "HUMAN*"
+        elif agent_colors["TARS*"] == "green":
+            return "TARS*"
+        elif agent_colors["HUMAN*"] == "yellow":
+            return "HUMAN*"
+        elif agent_colors["TARS*"] == "yellow":
+            return "TARS*"
+    
+    return None
+
+
+def build_performers_only_figures(df, highlight_track=None, category_overrides=None):
     """Build workflow graphs showing only HUMAN* and TARS* performers (no supporters)"""
+    if category_overrides is None:
+        category_overrides = {}
+    
     agents = ["HUMAN*", "TARS*"]
     VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
 
@@ -173,7 +235,7 @@ def build_performers_only_figures(df, highlight_track=None):
         dots = []
         grey_to_black_arrows = []
         black_to_black_arrows = []
-        most_reliable_track = []
+        highlight_track_list = []  # Unified track considering overrides
         dashed_arrows_to_highlight = []
 
         proc_df = proc_df.reset_index(drop=True)
@@ -189,19 +251,10 @@ def build_performers_only_figures(df, highlight_track=None):
                 "TARS*": row["TARS*"].strip().lower() if isinstance(row["TARS*"], str) else "",
             }
 
-            # Determine most reliable agent
-            chosen_agent = None
-            if agent_colors["HUMAN*"] == "green":
-                chosen_agent = "HUMAN*"
-            elif agent_colors["TARS*"] == "green":
-                chosen_agent = "TARS*"
-            elif agent_colors["HUMAN*"] == "yellow":
-                chosen_agent = "HUMAN*"
-            elif agent_colors["TARS*"] == "yellow":
-                chosen_agent = "TARS*"
-
+            # Determine chosen agent using the unified helper function
+            chosen_agent = get_chosen_agent_with_override(row, highlight_track, category_overrides, agent_colors)
             if chosen_agent:
-                most_reliable_track.append((task_idx, chosen_agent))
+                highlight_track_list.append((task_idx, chosen_agent))
 
             # Add dots for each agent column showing their own capabilities
             # HUMAN* column: HUMAN* performer (circle)
@@ -268,8 +321,11 @@ def build_performers_only_figures(df, highlight_track=None):
                     "is_support": True  # Flag to indicate this is a support relationship
                 }
                 grey_to_black_arrows.append(dashed_arrow)
-                if highlight_track == "most_reliable" and (task_idx, "HUMAN*") in most_reliable_track:
-                    dashed_arrows_to_highlight.append(dashed_arrow)
+                # Highlight support arrow if this task's performer is HUMAN* in the highlight track
+                # and we're using a "full support" mode
+                if highlight_track in ["human_full_support", "agent_whenever_possible_full_support", "most_reliable"]:
+                    if (task_idx, "HUMAN*") in highlight_track_list:
+                        dashed_arrows_to_highlight.append(dashed_arrow)
 
             # HUMAN -> TARS*
             if ("TARS*" in black_points and 
@@ -282,8 +338,11 @@ def build_performers_only_figures(df, highlight_track=None):
                     "is_support": True
                 }
                 grey_to_black_arrows.append(dashed_arrow)
-                if highlight_track == "most_reliable" and (task_idx, "TARS*") in most_reliable_track:
-                    dashed_arrows_to_highlight.append(dashed_arrow)
+                # Highlight support arrow if this task's performer is TARS* in the highlight track
+                # and we're using a "full support" mode
+                if highlight_track in ["human_full_support", "agent_whenever_possible_full_support", "most_reliable"]:
+                    if (task_idx, "TARS*") in highlight_track_list:
+                        dashed_arrows_to_highlight.append(dashed_arrow)
 
         # Step 2: Black-to-black transitions between performers (circles only)
         for i in range(len(tasks) - 1):
@@ -371,7 +430,7 @@ def build_performers_only_figures(df, highlight_track=None):
                 offsets = [0] * len(task_arrows)
             
             for arrow, offset in zip(task_arrows, offsets):
-                is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
+                is_highlighted = len(highlight_track_list) > 0 and arrow in dashed_arrows_to_highlight
                 # Draw dashed line from start_agent to end_agent with offset
                 fig.add_shape(
                     type="line",
@@ -387,12 +446,9 @@ def build_performers_only_figures(df, highlight_track=None):
                 )
 
         for arrow in black_to_black_arrows:
-            is_highlighted = False
-            if highlight_track == "human_baseline":
-                is_highlighted = arrow["start_agent"] == "HUMAN*" and arrow["end_agent"] == "HUMAN*"
-            elif highlight_track == "most_reliable":
-                is_highlighted = (arrow["start_task"], arrow["start_agent"]) in most_reliable_track and \
-                                 (arrow["end_task"], arrow["end_agent"]) in most_reliable_track
+            # Use the unified highlight_track_list for all strategies including category overrides
+            is_highlighted = (arrow["start_task"], arrow["start_agent"]) in highlight_track_list and \
+                             (arrow["end_task"], arrow["end_agent"]) in highlight_track_list
 
             fig.add_annotation(
                 x=agent_pos[arrow["end_agent"]],
@@ -438,8 +494,11 @@ def build_performers_only_figures(df, highlight_track=None):
     return figures
 
 
-def build_performers_only_combined_figure(df, highlight_track=None):
+def build_performers_only_combined_figure(df, highlight_track=None, category_overrides=None):
     """Build combined workflow graph showing only HUMAN* and TARS* performers (no supporters)"""
+    if category_overrides is None:
+        category_overrides = {}
+    
     agents = ["HUMAN*", "TARS*"]
     VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
     tasks = df["Task Object"].tolist()
@@ -451,7 +510,7 @@ def build_performers_only_combined_figure(df, highlight_track=None):
     df = df.reset_index(drop=True)
     df["task_idx"] = df.index
 
-    most_reliable_track = []
+    highlight_track_list = []  # Unified track considering overrides
     dashed_arrows_to_highlight = []
 
     for idx, row in df.iterrows():
@@ -463,19 +522,10 @@ def build_performers_only_combined_figure(df, highlight_track=None):
             "TARS*": row["TARS*"].strip().lower() if isinstance(row["TARS*"], str) else "",
         }
 
-        # Determine most reliable path
-        chosen_agent = None
-        if agent_colors["HUMAN*"] == "green":
-            chosen_agent = "HUMAN*"
-        elif agent_colors["TARS*"] == "green":
-            chosen_agent = "TARS*"
-        elif agent_colors["HUMAN*"] == "yellow":
-            chosen_agent = "HUMAN*"
-        elif agent_colors["TARS*"] == "yellow":
-            chosen_agent = "TARS*"
-
+        # Determine chosen agent using the unified helper function
+        chosen_agent = get_chosen_agent_with_override(row, highlight_track, category_overrides, agent_colors)
         if chosen_agent:
-            most_reliable_track.append((task_idx, chosen_agent))
+            highlight_track_list.append((task_idx, chosen_agent))
 
         # Add dots for each agent column showing their own capabilities
         # HUMAN* column: HUMAN* performer (circle)
@@ -542,8 +592,10 @@ def build_performers_only_combined_figure(df, highlight_track=None):
                 "is_support": True
             }
             grey_to_black_arrows.append(dashed_arrow)
-            if highlight_track == "most_reliable" and (task_idx, "HUMAN*") in most_reliable_track:
-                dashed_arrows_to_highlight.append(dashed_arrow)
+            # Highlight support arrow if this task's performer is HUMAN* in the highlight track
+            if highlight_track in ["human_full_support", "agent_whenever_possible_full_support", "most_reliable"]:
+                if (task_idx, "HUMAN*") in highlight_track_list:
+                    dashed_arrows_to_highlight.append(dashed_arrow)
 
         # HUMAN -> TARS*
         if ("TARS*" in black_points and 
@@ -556,8 +608,10 @@ def build_performers_only_combined_figure(df, highlight_track=None):
                 "is_support": True
             }
             grey_to_black_arrows.append(dashed_arrow)
-            if highlight_track == "most_reliable" and (task_idx, "TARS*") in most_reliable_track:
-                dashed_arrows_to_highlight.append(dashed_arrow)
+            # Highlight support arrow if this task's performer is TARS* in the highlight track
+            if highlight_track in ["human_full_support", "agent_whenever_possible_full_support", "most_reliable"]:
+                if (task_idx, "TARS*") in highlight_track_list:
+                    dashed_arrows_to_highlight.append(dashed_arrow)
 
     # Black-to-black transitions between performers (circles only)
     for i in range(len(df) - 1):
@@ -644,7 +698,7 @@ def build_performers_only_combined_figure(df, highlight_track=None):
             offsets = [0] * len(task_arrows)
         
         for arrow, offset in zip(task_arrows, offsets):
-            is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
+            is_highlighted = len(highlight_track_list) > 0 and arrow in dashed_arrows_to_highlight
             # Draw dashed line from start_agent to end_agent with offset
             fig.add_shape(
                 type="line",
@@ -660,12 +714,9 @@ def build_performers_only_combined_figure(df, highlight_track=None):
             )
 
     for arrow in black_to_black_arrows:
-        is_highlighted = False
-        if highlight_track == "human_baseline":
-            is_highlighted = arrow["start_agent"] == "HUMAN*" and arrow["end_agent"] == "HUMAN*"
-        elif highlight_track == "most_reliable":
-            is_highlighted = (arrow["start_task"], arrow["start_agent"]) in most_reliable_track and \
-                             (arrow["end_task"], arrow["end_agent"]) in most_reliable_track
+        # Use the unified highlight_track_list for all strategies including category overrides
+        is_highlighted = (arrow["start_task"], arrow["start_agent"]) in highlight_track_list and \
+                         (arrow["end_task"], arrow["end_agent"]) in highlight_track_list
 
         fig.add_annotation(
             x=agent_pos[arrow["end_agent"]],
@@ -708,7 +759,10 @@ def build_performers_only_combined_figure(df, highlight_track=None):
     return fig
 
 
-def build_interdependence_figures(df, highlight_track=None):
+def build_interdependence_figures(df, highlight_track=None, category_overrides=None):
+    if category_overrides is None:
+        category_overrides = {}
+    
     agents = ["HUMAN*", "TARS", "TARS*", "HUMAN"]
     VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
 
@@ -720,7 +774,7 @@ def build_interdependence_figures(df, highlight_track=None):
         dots = []
         grey_to_black_arrows = []
         black_to_black_arrows = []
-        most_reliable_track = []
+        highlight_track_list = []  # Unified track considering overrides
         dashed_arrows_to_highlight = []
 
         proc_df = proc_df.reset_index(drop=True)
@@ -736,19 +790,10 @@ def build_interdependence_figures(df, highlight_track=None):
                 "TARS*": row["TARS*"].strip().lower() if isinstance(row["TARS*"], str) else "",
             }
 
-            # Determine most reliable agent
-            chosen_agent = None
-            if agent_colors["HUMAN*"] == "green":
-                chosen_agent = "HUMAN*"
-            elif agent_colors["TARS*"] == "green":
-                chosen_agent = "TARS*"
-            elif agent_colors["HUMAN*"] == "yellow":
-                chosen_agent = "HUMAN*"
-            elif agent_colors["TARS*"] == "yellow":
-                chosen_agent = "TARS*"
-
+            # Determine chosen agent using the unified helper function
+            chosen_agent = get_chosen_agent_with_override(row, highlight_track, category_overrides, agent_colors)
             if chosen_agent:
-                most_reliable_track.append((task_idx, chosen_agent))
+                highlight_track_list.append((task_idx, chosen_agent))
 
             for col in ["Human*", "TARS*"]:
                 val = row[col].strip().lower() if isinstance(row[col], str) else ""
@@ -773,8 +818,10 @@ def build_interdependence_figures(df, highlight_track=None):
                             "task": task_idx
                         }
                         grey_to_black_arrows.append(dashed_arrow)
-                        if highlight_track == "most_reliable" and (task_idx, "HUMAN*") in most_reliable_track:
-                            dashed_arrows_to_highlight.append(dashed_arrow)
+                        # Highlight support arrow if this task's performer is HUMAN* in the highlight track
+                        if highlight_track in ["human_full_support", "agent_whenever_possible_full_support", "most_reliable"]:
+                            if (task_idx, "HUMAN*") in highlight_track_list:
+                                dashed_arrows_to_highlight.append(dashed_arrow)
 
                     elif (agent == "HUMAN"
                           and "TARS*" in black_points
@@ -786,8 +833,10 @@ def build_interdependence_figures(df, highlight_track=None):
                             "task": task_idx
                         }
                         grey_to_black_arrows.append(dashed_arrow)
-                        if highlight_track == "most_reliable" and (task_idx, "TARS*") in most_reliable_track:
-                            dashed_arrows_to_highlight.append(dashed_arrow)
+                        # Highlight support arrow if this task's performer is TARS* in the highlight track
+                        if highlight_track in ["human_full_support", "agent_whenever_possible_full_support", "most_reliable"]:
+                            if (task_idx, "TARS*") in highlight_track_list:
+                                dashed_arrows_to_highlight.append(dashed_arrow)
 
         # Step 2: Black-to-black transitions
         for i in range(len(tasks) - 1):
@@ -829,7 +878,7 @@ def build_interdependence_figures(df, highlight_track=None):
 
 
         for arrow in grey_to_black_arrows:
-            is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
+            is_highlighted = len(highlight_track_list) > 0 and arrow in dashed_arrows_to_highlight
             fig.add_shape(
                 type="line",
                 x0=agent_pos[arrow["start_agent"]],
@@ -844,12 +893,9 @@ def build_interdependence_figures(df, highlight_track=None):
             )
 
         for arrow in black_to_black_arrows:
-            is_highlighted = False
-            if highlight_track == "human_baseline":
-                is_highlighted = arrow["start_agent"] == "HUMAN*" and arrow["end_agent"] == "HUMAN*"
-            elif highlight_track == "most_reliable":
-                is_highlighted = (arrow["start_task"], arrow["start_agent"]) in most_reliable_track and \
-                                 (arrow["end_task"], arrow["end_agent"]) in most_reliable_track
+            # Use the unified highlight_track_list for all strategies including category overrides
+            is_highlighted = (arrow["start_task"], arrow["start_agent"]) in highlight_track_list and \
+                             (arrow["end_task"], arrow["end_agent"]) in highlight_track_list
 
             fig.add_annotation(
                 x=agent_pos[arrow["end_agent"]],
@@ -890,7 +936,10 @@ def build_interdependence_figures(df, highlight_track=None):
         figures[procedure] = fig
     return figures
 
-def build_combined_interdependence_figure(df, highlight_track=None):
+def build_combined_interdependence_figure(df, highlight_track=None, category_overrides=None):
+    if category_overrides is None:
+        category_overrides = {}
+    
     agents = ["HUMAN*", "TARS", "TARS*", "HUMAN"]
     VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
     tasks = df["Task Object"].tolist()
@@ -902,8 +951,8 @@ def build_combined_interdependence_figure(df, highlight_track=None):
     df = df.reset_index(drop=True)
     df["task_idx"] = df.index  # Unique index across all tasks
 
-    # Track the most reliable agent at each step
-    most_reliable_track = []
+    # Unified track considering category overrides
+    highlight_track_list = []
     dashed_arrows_to_highlight = []
 
     for idx, row in df.iterrows():
@@ -915,19 +964,10 @@ def build_combined_interdependence_figure(df, highlight_track=None):
             "TARS*": row["TARS*"].strip().lower() if isinstance(row["TARS*"], str) else "",
         }
 
-        # Determine most reliable path based on green/yellow preference for HUMAN*
-        chosen_agent = None
-        if agent_colors["HUMAN*"] == "green":
-            chosen_agent = "HUMAN*"
-        elif agent_colors["TARS*"] == "green":
-            chosen_agent = "TARS*"
-        elif agent_colors["HUMAN*"] == "yellow":
-            chosen_agent = "HUMAN*"
-        elif agent_colors["TARS*"] == "yellow":
-            chosen_agent = "TARS*"
-
+        # Determine chosen agent using the unified helper function
+        chosen_agent = get_chosen_agent_with_override(row, highlight_track, category_overrides, agent_colors)
         if chosen_agent:
-            most_reliable_track.append((task_idx, chosen_agent))
+            highlight_track_list.append((task_idx, chosen_agent))
 
         for col in ["Human*", "TARS*"]:
             val = row[col].strip().lower() if isinstance(row[col], str) else ""
@@ -954,7 +994,8 @@ def build_combined_interdependence_figure(df, highlight_track=None):
                         "task": task_idx
                     }
                     grey_to_black_arrows.append(dashed_arrow)
-                    if highlight_track == "most_reliable" and (task_idx, "HUMAN*") in most_reliable_track:
+                    # Highlight if this task's chosen agent is HUMAN*
+                    if (task_idx, "HUMAN*") in highlight_track_list:
                         dashed_arrows_to_highlight.append(dashed_arrow)
 
                 elif (
@@ -969,7 +1010,8 @@ def build_combined_interdependence_figure(df, highlight_track=None):
                         "task": task_idx
                     }
                     grey_to_black_arrows.append(dashed_arrow)
-                    if highlight_track == "most_reliable" and (task_idx, "TARS*") in most_reliable_track:
+                    # Highlight if this task's chosen agent is TARS*
+                    if (task_idx, "TARS*") in highlight_track_list:
                         dashed_arrows_to_highlight.append(dashed_arrow)
 
     for i in range(len(df) - 1):
@@ -1010,7 +1052,7 @@ def build_combined_interdependence_figure(df, highlight_track=None):
 
 
     for arrow in grey_to_black_arrows:
-        is_highlighted = highlight_track == "most_reliable" and arrow in dashed_arrows_to_highlight
+        is_highlighted = len(highlight_track_list) > 0 and arrow in dashed_arrows_to_highlight
         fig.add_shape(
             type="line",
             x0=agent_pos[arrow["start_agent"]],
@@ -1025,12 +1067,9 @@ def build_combined_interdependence_figure(df, highlight_track=None):
         )
 
     for arrow in black_to_black_arrows:
-        is_highlighted = False
-        if highlight_track == "human_baseline":
-            is_highlighted = arrow["start_agent"] == "HUMAN*" and arrow["end_agent"] == "HUMAN*"
-        elif highlight_track == "most_reliable":
-            is_highlighted = (arrow["start_task"], arrow["start_agent"]) in most_reliable_track and \
-                             (arrow["end_task"], arrow["end_agent"]) in most_reliable_track
+        # Use the unified highlight_track_list for all strategies including category overrides
+        is_highlighted = (arrow["start_task"], arrow["start_agent"]) in highlight_track_list and \
+                         (arrow["end_task"], arrow["end_agent"]) in highlight_track_list
 
         fig.add_annotation(
             x=agent_pos[arrow["end_agent"]],
@@ -1132,13 +1171,37 @@ def interdependence_analysis_page():
         id="highlight-selector",
         options=[
             {"label": "No highlight", "value": "none"},
-            {"label": "Baseline SPO", "value": "human_baseline"},
+            {"label": "Human-performer-only no support", "value": "human_baseline"},
+            {"label": "Human-performer-only full support", "value": "human_full_support"},
+            {"label": "Agent-performer-whenever-possible no support", "value": "agent_whenever_possible"},
+            {"label": "Agent-performer-whenever-possible full support", "value": "agent_whenever_possible_full_support"},
             {"label": "Most reliable path", "value": "most_reliable"}
         ],
         value="none",
         labelStyle={'display': 'inline-block', 'margin-right': '20px'},
         style={"textAlign": "center", "marginTop": "20px"}
         ),
+
+        # Category overrides section
+        html.Div([
+            html.H4("Category Overrides", style={"textAlign": "center", "marginTop": "30px", "marginBottom": "10px"}),
+            html.P("Override performer assignment for specific task categories:", 
+                   style={"textAlign": "center", "color": "#666", "fontSize": "14px"}),
+            html.Div(id="category-overrides-container", style={
+                "display": "flex",
+                "flexWrap": "wrap",
+                "justifyContent": "center",
+                "gap": "20px",
+                "marginTop": "15px",
+                "marginBottom": "20px",
+                "padding": "15px",
+                "backgroundColor": "#f9f9f9",
+                "borderRadius": "8px"
+            })
+        ]),
+
+        # Hidden store for category override values
+        dcc.Store(id="category-overrides-store", data={}),
 
         # Graph
         dcc.Graph(id="interdependence-graph", config={
@@ -1265,28 +1328,96 @@ def display_page(pathname):
     else:
         return interdependence_analysis_page()
 
+# Callback to generate category override radio buttons dynamically
+@app.callback(
+    Output("category-overrides-container", "children"),
+    Input("responsibility-table", "data")
+)
+def generate_category_overrides(data):
+    if not data:
+        return []
+    
+    df = pd.DataFrame(data)
+    if "Category" not in df.columns:
+        return []
+    
+    # Get unique categories
+    categories = sorted(df["Category"].dropna().unique())
+    
+    # Create radio buttons for each category
+    category_controls = []
+    for category in categories:
+        category_controls.append(
+            html.Div([
+                html.Label(category, style={
+                    "fontWeight": "bold",
+                    "marginBottom": "5px",
+                    "display": "block",
+                    "fontSize": "13px"
+                }),
+                dcc.RadioItems(
+                    id={"type": "category-override", "category": category},
+                    options=[
+                        {"label": "Default", "value": "default"},
+                        {"label": "HUMAN", "value": "HUMAN"},
+                        {"label": "TARS", "value": "TARS"}
+                    ],
+                    value="default",
+                    labelStyle={'display': 'block', 'fontSize': '12px'},
+                    inputStyle={"marginRight": "5px"}
+                )
+            ], style={
+                "backgroundColor": "white",
+                "padding": "10px 15px",
+                "borderRadius": "5px",
+                "border": "1px solid #ddd",
+                "minWidth": "120px"
+            })
+        )
+    
+    return category_controls
+
+# Callback to collect all category overrides into a single store
+@app.callback(
+    Output("category-overrides-store", "data"),
+    Input({"type": "category-override", "category": dash.ALL}, "value"),
+    State({"type": "category-override", "category": dash.ALL}, "id"),
+    prevent_initial_call=True
+)
+def collect_category_overrides(values, ids):
+    if not values or not ids:
+        return {}
+    
+    overrides = {}
+    for id_dict, value in zip(ids, values):
+        if value != "default":
+            overrides[id_dict["category"]] = value
+    
+    return overrides
+
 @app.callback(
     Output("interdependence-graph", "figure"),
-    Output("bar-chart-whole-scenario", "figure"),
-    Output("most-reliable-bar-chart", "figure"),
-    Output("spo_baseline-bar-chart", "figure"),
-    Output("allocation-type-bar-chart", "figure"),
-    Output("agent-autonomy-bar-chart", "figure"),
     Input("procedure-dropdown", "value"),
     Input("highlight-selector", "value"),
     Input("view-selector", "value"),
+    Input("category-overrides-store", "data"),
     State("responsibility-table", "data")
 )
-def update_graph_and_bar(procedure, highlight_track, view_mode, data):
+def update_workflow_graph(procedure, highlight_track, view_mode, category_overrides, data):
+    """Update only the workflow graph - separate from bar charts for performance."""
     df = pd.DataFrame(data)
+    
+    # Ensure category_overrides is a dict
+    if category_overrides is None:
+        category_overrides = {}
+    
     # --- Workflow Graph ---
     if procedure is None:
         # Combined view
         if view_mode == "performers":
-            workflow_fig = build_performers_only_combined_figure(df, highlight_track)
+            workflow_fig = build_performers_only_combined_figure(df, highlight_track, category_overrides)
         else:
-            workflow_fig = build_combined_interdependence_figure(df, highlight_track)
-        df_bar = df
+            workflow_fig = build_combined_interdependence_figure(df, highlight_track, category_overrides)
     else:
         # Single procedure view
         if highlight_track == "none":
@@ -1295,11 +1426,31 @@ def update_graph_and_bar(procedure, highlight_track, view_mode, data):
             highlight_track_val = highlight_track
         
         if view_mode == "performers":
-            figures = build_performers_only_figures(df, highlight_track_val)
+            figures = build_performers_only_figures(df, highlight_track_val, category_overrides)
         else:
-            figures = build_interdependence_figures(df, highlight_track_val)
+            figures = build_interdependence_figures(df, highlight_track_val, category_overrides)
         
         workflow_fig = figures.get(procedure, go.Figure())
+    
+    return workflow_fig
+
+
+@app.callback(
+    Output("bar-chart-whole-scenario", "figure"),
+    Output("most-reliable-bar-chart", "figure"),
+    Output("spo_baseline-bar-chart", "figure"),
+    Output("allocation-type-bar-chart", "figure"),
+    Output("agent-autonomy-bar-chart", "figure"),
+    Input("procedure-dropdown", "value"),
+    State("responsibility-table", "data")
+)
+def update_bar_charts(procedure, data):
+    """Update bar charts - only when procedure changes, not on highlight changes."""
+    df = pd.DataFrame(data)
+    
+    if procedure is None:
+        df_bar = df
+    else:
         df_bar = df[df["Procedure"] == procedure]
 
 # --- Bar Chart for the whole scenario---
@@ -1575,7 +1726,7 @@ def update_graph_and_bar(procedure, highlight_track, view_mode, data):
         marker_color="darkorange"
     ))
     bar_fig_spo.update_layout(
-        title="SPO Baseline Path: Human pilot capacities",
+        title="Human-only no support Path: Human pilot capacities",
         xaxis_title="Role and Capacity",
         yaxis_title="Number of Tasks",
         bargap=0.3,
@@ -1787,7 +1938,7 @@ def update_graph_and_bar(procedure, highlight_track, view_mode, data):
         margin=dict(l=100, r=50, t=50, b=50)
     )
 
-    return workflow_fig, bar_fig_whole_scenario, bar_fig, bar_fig_spo, allocation_fig, autonomy_fig
+    return bar_fig_whole_scenario, bar_fig, bar_fig_spo, allocation_fig, autonomy_fig
 
 
 @app.callback(
