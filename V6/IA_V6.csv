@@ -43,7 +43,7 @@ ENG FAILURE DURING TAKEOFF,EMER,Memory item,Flight Control,Accelerate,TO V_ENR,y
 ENG FAILURE DURING TAKEOFF,EMER,SOP,ATC Communication,ATC,CONTACT,yellow,yellow,orange,orange,TARS must display ATC communication status to the pilot.,Pilot must anticipate TARS's next ATC message.,Pilot can override TARS's ATC communication with voice command.
 ENG FAILURE DURING TAKEOFF,EMER,SOP,ATC Communication,ATC,READBACK,yellow,yellow,yellow,yellow,,,
 ENGINE FIRE,EMER,SOP,Checklist Mgmt,Checklist,ORDER START,yellow,yellow,green,,TARS displays current checklist step and expected worklow. ,TARS anticipates pilot's checklist step confirmations; pilot expects TARS to announce next steps.,Pilot can override or modify TARS actions via voice command. pilot confirms checklist initiation.
-ENGINE FIRE,EMER,Checklist,Other,Immediate Action Item,CHECK DONE,green,green,red,,Pilot confirms,,
+ENGINE FIRE,EMER,Checklist,Parameter check,Immediate Action Item,CHECK DONE,green,green,red,,Pilot confirms,,
 ENGINE FIRE,EMER,Checklist,Switch / Lever,Throttle (affected engine),CUTOFF,yellow,yellow,red,,TARS can support the pilot by calling out the action,,
 ENGINE FIRE,EMER,Checklist,Switch / Lever,FUEL BOOST Switch (affected side),OFF,yellow,yellow,red,,TARS can support the pilot by calling out the action,,
 ENGINE FIRE,EMER,Checklist,Switch / Lever,FUEL BOOST Switch (affected side),NORM,yellow,yellow,red,,TARS can support the pilot by calling out the action,,
@@ -73,7 +73,7 @@ AFTER TAKEOFF,NORM,Checklist,Checklist Mgmt,Checklist,ANNOUNCE COMPLETED,green,,
 AFTER TAKEOFF,NORM,Checklist,Checklist Mgmt,Next Checklist,ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,green,green,green,,TARS displays checklist progress.,TARS announces next checklist step before execution.,Pilot can override TARS actions via voice command.
 ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,SOP,Checklist Mgmt,Checklist,ORDER START,yellow,yellow,green,,TARS displays checklist progress.,TARS announces next checklist step before execution.,Pilot can override TARS actions via voice command.
 ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Switch / Lever,Throttle (affected engine),CUTOFF,yellow,yellow,green,,TARS displays engine status and monitor pilot's actions.,,
-ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Other,CAUTION text,READ,green,green,green,,,,Pilot can override TARS actions; TARS prompts pilot for confirmation.
+ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Callout,CAUTION text,READ,green,green,green,,,,Pilot can override TARS actions; TARS prompts pilot for confirmation.
 ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Switch / Lever,GEN Switch (affected side),OFF,green,green,red,,TARS displays GEN switch status and monitor pilot's actions.,,
 ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Switch / Lever,IGNITION switch (affected side),NORM,green,green,red,,TARS displays IGN switch status and monitor pilot's actions.,,
 ENGINE FAILURE/PRECAUTIONARY SHUTDOWN,ABNORM,Checklist,Switch / Lever,Electrical Load,REDUCE as required (<= 300A),yellow,yellow,yellow,yellow,TARS must display current electrical load and recommendations.,Human must anticipate TARS's suggestions for load reduction.,Human can command TARS to suggest specific load reduction actions.
