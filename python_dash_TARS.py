@@ -219,6 +219,381 @@ def get_chosen_agent_with_override(row, highlight_track, category_overrides, age
     return None
 
 
+def build_performers_only_figure_base(df, procedure):
+    """Build base figure for performers-only view (single procedure) without highlighting."""
+    agents = ["HUMAN*", "TARS*"]
+    VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
+    
+    proc_df = df[df["Procedure"] == procedure].reset_index(drop=True)
+    proc_df["task_idx"] = proc_df.index
+    tasks = proc_df["Task Object"].tolist()
+    height = 400 + len(tasks) * 60
+    
+    dots = []
+    dashed_arrows = []
+    black_to_black_arrows = []
+    
+    for idx, row in proc_df.iterrows():
+        task_idx = row["task_idx"]
+        black_points = []
+        
+        # HUMAN* performer
+        human_performer_val = row["Human*"].strip().lower() if isinstance(row["Human*"], str) else ""
+        if human_performer_val in VALID_COLORS and human_performer_val != "red":
+            dots.append({"task": task_idx, "agent": "HUMAN*", "shape": "circle", "color": human_performer_val, "role": "performer"})
+            black_points.append("HUMAN*")
+        
+        # TARS* performer
+        tars_performer_val = row["TARS*"].strip().lower() if isinstance(row["TARS*"], str) else ""
+        if tars_performer_val in VALID_COLORS and tars_performer_val != "red":
+            dots.append({"task": task_idx, "agent": "TARS*", "shape": "circle", "color": tars_performer_val, "role": "performer"})
+            black_points.append("TARS*")
+        
+        # TARS supporter (square)
+        tars_supporter_val = row["TARS"].strip().lower() if isinstance(row["TARS"], str) and row["TARS"] else ""
+        if tars_supporter_val in VALID_COLORS and tars_supporter_val != "red":
+            dots.append({"task": task_idx, "agent": "TARS*", "shape": "square", "color": tars_supporter_val, "role": "supporter"})
+        
+        # HUMAN supporter (square)
+        human_supporter_val = row["Human"].strip().lower() if isinstance(row["Human"], str) and row["Human"] else ""
+        if human_supporter_val in VALID_COLORS and human_supporter_val != "red":
+            dots.append({"task": task_idx, "agent": "HUMAN*", "shape": "square", "color": human_supporter_val, "role": "supporter"})
+        
+        # Dashed arrows for support relationships
+        if "TARS*" in black_points and tars_supporter_val in VALID_COLORS and tars_supporter_val != "red":
+            dashed_arrows.append({"start_agent": "TARS*", "end_agent": "TARS*", "task": task_idx, "is_support": True})
+        if "HUMAN*" in black_points and human_supporter_val in VALID_COLORS and human_supporter_val != "red":
+            dashed_arrows.append({"start_agent": "HUMAN*", "end_agent": "HUMAN*", "task": task_idx, "is_support": True})
+    
+    # Black-to-black arrows between consecutive tasks
+    for i in range(len(proc_df) - 1):
+        current_performers = [d["agent"] for d in dots if d["task"] == i and d["shape"] == "circle"]
+        next_performers = [d["agent"] for d in dots if d["task"] == i + 1 and d["shape"] == "circle"]
+        for curr in current_performers:
+            for nxt in next_performers:
+                black_to_black_arrows.append({
+                    "start_task": i, "start_agent": curr,
+                    "end_task": i + 1, "end_agent": nxt
+                })
+    
+    # Build figure
+    agent_pos = {agent: i for i, agent in enumerate(agents)}
+    fig = go.Figure()
+    
+    for dot in dots:
+        row = proc_df.iloc[dot["task"]]
+        hover_text = f"<b>Task:</b> {wrap_text(row['Task Object'])}<br><b>Agent:</b> {dot['agent']}<br><b>Role:</b> {dot['role']}"
+        
+        if dot["shape"] == "circle":
+            fig.add_trace(go.Scatter(
+                x=[agent_pos[dot["agent"]]], y=[dot["task"]], mode="markers",
+                marker=dict(size=30, color=dot["color"]), showlegend=False,
+                hoverinfo="text", hovertext=hover_text
+            ))
+        else:  # square
+            fig.add_trace(go.Scatter(
+                x=[agent_pos[dot["agent"]]], y=[dot["task"]], mode="markers",
+                marker=dict(size=15, color=dot["color"], symbol="square"),
+                showlegend=False, hoverinfo="text", hovertext=hover_text
+            ))
+    
+    # Add dashed arrows (shapes) - stored for later highlighting
+    dashed_arrow_info = []
+    for arrow in dashed_arrows:
+        fig.add_shape(
+            type="line",
+            x0=agent_pos[arrow["start_agent"]], y0=arrow["task"],
+            x1=agent_pos[arrow["end_agent"]], y1=arrow["task"],
+            line=dict(color="black", width=2, dash="dot")
+        )
+        dashed_arrow_info.append({"task": arrow["task"], "end_agent": arrow["end_agent"]})
+    
+    # Add black-to-black arrows (annotations) - stored for later highlighting
+    for arrow in black_to_black_arrows:
+        fig.add_annotation(
+            x=agent_pos[arrow["end_agent"]], y=arrow["end_task"],
+            ax=agent_pos[arrow["start_agent"]], ay=arrow["start_task"],
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True, arrowhead=3, arrowsize=1, arrowwidth=2, arrowcolor="black", opacity=0.9,
+            standoff=18, startstandoff=18
+        )
+    
+    fig.update_layout(
+        title=f"Workflow for {procedure} - Performers Only",
+        xaxis=dict(tickvals=list(agent_pos.values()), ticktext=list(agent_pos.keys()), title="Agent", showgrid=True, gridcolor='lightgrey', range=[-0.5, 1.5]),
+        yaxis=dict(tickvals=list(range(len(tasks))), ticktext=[wrap_text(t) for t in tasks], title="Task", autorange="reversed", showgrid=True, gridcolor='lightgrey'),
+        margin=dict(l=250, r=50, t=50, b=50), height=height, plot_bgcolor='white', paper_bgcolor='white'
+    )
+    
+    arrow_info = {"dashed_arrows": dashed_arrow_info, "black_to_black_arrows": black_to_black_arrows}
+    return fig, arrow_info
+
+
+def build_performers_only_combined_figure_base(df):
+    """Build base figure for performers-only combined view without highlighting."""
+    agents = ["HUMAN*", "TARS*"]
+    VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
+    
+    df = df.reset_index(drop=True)
+    df["task_idx"] = df.index
+    tasks = df["Task Object"].tolist()
+    height = 600 + len(tasks) * 100
+    
+    dots = []
+    dashed_arrows = []
+    black_to_black_arrows = []
+    
+    for idx, row in df.iterrows():
+        task_idx = row["task_idx"]
+        black_points = []
+        
+        human_performer_val = row["Human*"].strip().lower() if isinstance(row["Human*"], str) else ""
+        if human_performer_val in VALID_COLORS and human_performer_val != "red":
+            dots.append({"task": task_idx, "agent": "HUMAN*", "shape": "circle", "color": human_performer_val, "role": "performer"})
+            black_points.append("HUMAN*")
+        
+        tars_performer_val = row["TARS*"].strip().lower() if isinstance(row["TARS*"], str) else ""
+        if tars_performer_val in VALID_COLORS and tars_performer_val != "red":
+            dots.append({"task": task_idx, "agent": "TARS*", "shape": "circle", "color": tars_performer_val, "role": "performer"})
+            black_points.append("TARS*")
+        
+        tars_supporter_val = row["TARS"].strip().lower() if isinstance(row["TARS"], str) and row["TARS"] else ""
+        if tars_supporter_val in VALID_COLORS and tars_supporter_val != "red":
+            dots.append({"task": task_idx, "agent": "TARS*", "shape": "square", "color": tars_supporter_val, "role": "supporter"})
+        
+        human_supporter_val = row["Human"].strip().lower() if isinstance(row["Human"], str) and row["Human"] else ""
+        if human_supporter_val in VALID_COLORS and human_supporter_val != "red":
+            dots.append({"task": task_idx, "agent": "HUMAN*", "shape": "square", "color": human_supporter_val, "role": "supporter"})
+        
+        if "TARS*" in black_points and tars_supporter_val in VALID_COLORS and tars_supporter_val != "red":
+            dashed_arrows.append({"start_agent": "TARS*", "end_agent": "TARS*", "task": task_idx, "is_support": True})
+        if "HUMAN*" in black_points and human_supporter_val in VALID_COLORS and human_supporter_val != "red":
+            dashed_arrows.append({"start_agent": "HUMAN*", "end_agent": "HUMAN*", "task": task_idx, "is_support": True})
+    
+    for i in range(len(df) - 1):
+        current_performers = [d["agent"] for d in dots if d["task"] == i and d["shape"] == "circle"]
+        next_performers = [d["agent"] for d in dots if d["task"] == i + 1 and d["shape"] == "circle"]
+        for curr in current_performers:
+            for nxt in next_performers:
+                black_to_black_arrows.append({"start_task": i, "start_agent": curr, "end_task": i + 1, "end_agent": nxt})
+    
+    agent_pos = {agent: i for i, agent in enumerate(agents)}
+    fig = go.Figure()
+    
+    for dot in dots:
+        row = df.iloc[dot["task"]]
+        hover_text = f"<b>Task:</b> {wrap_text(row['Task Object'])}<br><b>Agent:</b> {dot['agent']}<br><b>Role:</b> {dot['role']}"
+        
+        if dot["shape"] == "circle":
+            fig.add_trace(go.Scatter(
+                x=[agent_pos[dot["agent"]]], y=[dot["task"]], mode="markers",
+                marker=dict(size=40, color=dot["color"]), showlegend=False,
+                hoverinfo="text", hovertext=hover_text
+            ))
+        else:
+            fig.add_trace(go.Scatter(
+                x=[agent_pos[dot["agent"]]], y=[dot["task"]], mode="markers",
+                marker=dict(size=17, color=dot["color"], symbol="square"),
+                showlegend=False, hoverinfo="text", hovertext=hover_text
+            ))
+    
+    dashed_arrow_info = []
+    for arrow in dashed_arrows:
+        fig.add_shape(
+            type="line",
+            x0=agent_pos[arrow["start_agent"]], y0=arrow["task"],
+            x1=agent_pos[arrow["end_agent"]], y1=arrow["task"],
+            line=dict(color="black", width=2, dash="dot")
+        )
+        dashed_arrow_info.append({"task": arrow["task"], "end_agent": arrow["end_agent"]})
+    
+    for arrow in black_to_black_arrows:
+        fig.add_annotation(
+            x=agent_pos[arrow["end_agent"]], y=arrow["end_task"],
+            ax=agent_pos[arrow["start_agent"]], ay=arrow["start_task"],
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True, arrowhead=3, arrowsize=1, arrowwidth=2, arrowcolor="black", opacity=0.9, standoff=15
+        )
+    
+    fig.update_layout(
+        title="Combined Workflow Graph - Performers Only (All Procedures)",
+        xaxis=dict(tickvals=list(agent_pos.values()), ticktext=list(agent_pos.keys()), title="Agent", showgrid=True, gridcolor='lightgrey', range=[-0.5, 1.5]),
+        yaxis=dict(tickvals=list(df["task_idx"]), ticktext=[wrap_text(f"{p} | {t}") for p, t in zip(df["Procedure"], df["Task Object"])], title="Procedure | Task", autorange="reversed", showgrid=True, gridcolor='lightgrey'),
+        margin=dict(l=250, r=50, t=50, b=50), height=height, plot_bgcolor='white', paper_bgcolor='white'
+    )
+    
+    arrow_info = {"dashed_arrows": dashed_arrow_info, "black_to_black_arrows": black_to_black_arrows}
+    return fig, arrow_info
+
+
+def build_interdependence_figure_base(df, procedure):
+    """Build base figure for full interdependence view (single procedure) without highlighting."""
+    agents = ["HUMAN*", "TARS", "TARS*", "HUMAN"]
+    VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
+    
+    proc_df = df[df["Procedure"] == procedure].reset_index(drop=True)
+    proc_df["task_idx"] = proc_df.index
+    tasks = proc_df["Task Object"].tolist()
+    height = 400 + len(tasks) * 60
+    
+    dots = []
+    dashed_arrows = []
+    black_to_black_arrows = []
+    
+    for idx, row in proc_df.iterrows():
+        task_idx = row["task_idx"]
+        black_points = []
+        
+        for col in ["Human*", "TARS*"]:
+            val = row[col].strip().lower() if isinstance(row[col], str) else ""
+            if val in VALID_COLORS:
+                dots.append({"task": task_idx, "agent": col.upper(), "color": val})
+                if val != "red":
+                    black_points.append(col.upper())
+        
+        for col in ["Human", "TARS"]:
+            val = row[col].strip().lower() if isinstance(row[col], str) else ""
+            if val in VALID_COLORS:
+                agent = col.upper()
+                dots.append({"task": task_idx, "agent": agent, "color": val})
+                
+                if agent == "TARS" and "HUMAN*" in black_points and row["Human*"].strip().lower() != "red" and row["TARS"].strip().lower() != "red":
+                    dashed_arrows.append({"start_agent": "TARS", "end_agent": "HUMAN*", "task": task_idx})
+                elif agent == "HUMAN" and "TARS*" in black_points and row["TARS*"].strip().lower() != "red" and row["Human"].strip().lower() != "red":
+                    dashed_arrows.append({"start_agent": "HUMAN", "end_agent": "TARS*", "task": task_idx})
+    
+    for i in range(len(proc_df) - 1):
+        current_blacks = [d for d in dots if d["task"] == i and d["agent"] in ["HUMAN*", "TARS*"] and d["color"] != "red"]
+        next_blacks = [d for d in dots if d["task"] == i + 1 and d["agent"] in ["HUMAN*", "TARS*"] and d["color"] != "red"]
+        for curr in current_blacks:
+            for nxt in next_blacks:
+                black_to_black_arrows.append({"start_task": i, "start_agent": curr["agent"], "end_task": i + 1, "end_agent": nxt["agent"]})
+    
+    agent_pos = {agent: i for i, agent in enumerate(agents)}
+    fig = go.Figure()
+    
+    for dot in dots:
+        row = proc_df.iloc[dot["task"]]
+        hover_text = f"<b>Task:</b> {wrap_text(row['Task Object'])}<br><b>Agent:</b> {dot['agent']}"
+        fig.add_trace(go.Scatter(
+            x=[agent_pos[dot["agent"]]], y=[dot["task"]], mode="markers",
+            marker=dict(size=20, color=dot["color"]), showlegend=False,
+            hoverinfo="text", hovertext=hover_text
+        ))
+    
+    dashed_arrow_info = []
+    for arrow in dashed_arrows:
+        fig.add_shape(
+            type="line",
+            x0=agent_pos[arrow["start_agent"]], y0=arrow["task"],
+            x1=agent_pos[arrow["end_agent"]], y1=arrow["task"],
+            line=dict(color="black", width=2, dash="dot")
+        )
+        dashed_arrow_info.append({"task": arrow["task"], "end_agent": arrow["end_agent"]})
+    
+    for arrow in black_to_black_arrows:
+        fig.add_annotation(
+            x=agent_pos[arrow["end_agent"]], y=arrow["end_task"],
+            ax=agent_pos[arrow["start_agent"]], ay=arrow["start_task"],
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True, arrowhead=3, arrowsize=1, arrowwidth=2, arrowcolor="black", opacity=0.9
+        )
+    
+    fig.update_layout(
+        title=f"Workflow for {procedure}",
+        xaxis=dict(tickvals=list(agent_pos.values()), ticktext=list(agent_pos.keys()), title="Agent", showgrid=True, gridcolor='lightgrey'),
+        yaxis=dict(tickvals=list(range(len(tasks))), ticktext=[wrap_text(t) for t in tasks], title="Task", autorange="reversed", showgrid=True, gridcolor='lightgrey'),
+        margin=dict(l=250, r=50, t=50, b=50), height=height, plot_bgcolor='white', paper_bgcolor='white'
+    )
+    
+    arrow_info = {"dashed_arrows": dashed_arrow_info, "black_to_black_arrows": black_to_black_arrows}
+    return fig, arrow_info
+
+
+def build_combined_interdependence_figure_base(df):
+    """Build base figure for full interdependence combined view without highlighting."""
+    agents = ["HUMAN*", "TARS", "TARS*", "HUMAN"]
+    VALID_COLORS = {"red", "yellow", "green", "orange", "black", "grey"}
+    
+    df = df.reset_index(drop=True)
+    df["task_idx"] = df.index
+    tasks = df["Task Object"].tolist()
+    height = 600 + len(tasks) * 100
+    
+    dots = []
+    dashed_arrows = []
+    black_to_black_arrows = []
+    
+    for idx, row in df.iterrows():
+        task_idx = row["task_idx"]
+        black_points = []
+        
+        for col in ["Human*", "TARS*"]:
+            val = row[col].strip().lower() if isinstance(row[col], str) else ""
+            if val in VALID_COLORS:
+                dots.append({"task": task_idx, "agent": col.upper(), "color": val})
+                if val != "red":
+                    black_points.append(col.upper())
+        
+        for col in ["Human", "TARS"]:
+            val = row[col].strip().lower() if isinstance(row[col], str) else ""
+            if val in VALID_COLORS:
+                agent = col.upper()
+                dots.append({"task": task_idx, "agent": agent, "color": val})
+                
+                if agent == "TARS" and "HUMAN*" in black_points and row["Human*"].strip().lower() != "red" and row["TARS"].strip().lower() != "red":
+                    dashed_arrows.append({"start_agent": "TARS", "end_agent": "HUMAN*", "task": task_idx})
+                elif agent == "HUMAN" and "TARS*" in black_points and row["TARS*"].strip().lower() != "red" and row["Human"].strip().lower() != "red":
+                    dashed_arrows.append({"start_agent": "HUMAN", "end_agent": "TARS*", "task": task_idx})
+    
+    for i in range(len(df) - 1):
+        current_blacks = [d for d in dots if d["task"] == i and d["agent"] in ["HUMAN*", "TARS*"] and d["color"] != "red"]
+        next_blacks = [d for d in dots if d["task"] == i + 1 and d["agent"] in ["HUMAN*", "TARS*"] and d["color"] != "red"]
+        for curr in current_blacks:
+            for nxt in next_blacks:
+                black_to_black_arrows.append({"start_task": i, "start_agent": curr["agent"], "end_task": i + 1, "end_agent": nxt["agent"]})
+    
+    agent_pos = {agent: i for i, agent in enumerate(agents)}
+    fig = go.Figure()
+    
+    for dot in dots:
+        row = df.iloc[dot["task"]]
+        hover_text = f"<b>Task:</b> {wrap_text(row['Task Object'])}<br><b>Agent:</b> {dot['agent']}"
+        fig.add_trace(go.Scatter(
+            x=[agent_pos[dot["agent"]]], y=[dot["task"]], mode="markers",
+            marker=dict(size=20, color=dot["color"]), showlegend=False,
+            hoverinfo="text", hovertext=hover_text
+        ))
+    
+    dashed_arrow_info = []
+    for arrow in dashed_arrows:
+        fig.add_shape(
+            type="line",
+            x0=agent_pos[arrow["start_agent"]], y0=arrow["task"],
+            x1=agent_pos[arrow["end_agent"]], y1=arrow["task"],
+            line=dict(color="black", width=2, dash="dot")
+        )
+        dashed_arrow_info.append({"task": arrow["task"], "end_agent": arrow["end_agent"]})
+    
+    for arrow in black_to_black_arrows:
+        fig.add_annotation(
+            x=agent_pos[arrow["end_agent"]], y=arrow["end_task"],
+            ax=agent_pos[arrow["start_agent"]], ay=arrow["start_task"],
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True, arrowhead=3, arrowsize=1, arrowwidth=2, arrowcolor="black", opacity=0.9
+        )
+    
+    fig.update_layout(
+        title="Combined Workflow Graph (All Procedures)",
+        xaxis=dict(tickvals=list(agent_pos.values()), ticktext=list(agent_pos.keys()), title="Agent", showgrid=True, gridcolor='lightgrey'),
+        yaxis=dict(tickvals=list(df["task_idx"]), ticktext=[wrap_text(f"{p} | {t}") for p, t in zip(df["Procedure"], df["Task Object"])], title="Procedure | Task", autorange="reversed", showgrid=True, gridcolor='lightgrey'),
+        margin=dict(l=250, r=50, t=50, b=50), height=height, plot_bgcolor='white', paper_bgcolor='white'
+    )
+    
+    arrow_info = {"dashed_arrows": dashed_arrow_info, "black_to_black_arrows": black_to_black_arrows}
+    return fig, arrow_info
+
+
 def build_performers_only_figures(df, highlight_track=None, category_overrides=None):
     """Build workflow graphs showing only HUMAN* and TARS* performers (no supporters)"""
     if category_overrides is None:
@@ -1202,6 +1577,10 @@ def interdependence_analysis_page():
 
         # Hidden store for category override values
         dcc.Store(id="category-overrides-store", data={}),
+        
+        # Cache for base figure (without highlighting) to avoid rebuilding
+        dcc.Store(id="base-figure-store", data=None),
+        dcc.Store(id="arrow-indices-store", data=None),
 
         # Graph
         dcc.Graph(id="interdependence-graph", config={
@@ -1396,43 +1775,118 @@ def collect_category_overrides(values, ids):
     return overrides
 
 @app.callback(
-    Output("interdependence-graph", "figure"),
+    Output("base-figure-store", "data"),
+    Output("arrow-indices-store", "data"),
     Input("procedure-dropdown", "value"),
-    Input("highlight-selector", "value"),
     Input("view-selector", "value"),
-    Input("category-overrides-store", "data"),
     State("responsibility-table", "data")
 )
-def update_workflow_graph(procedure, highlight_track, view_mode, category_overrides, data):
-    """Update only the workflow graph - separate from bar charts for performance."""
+def build_base_figure(procedure, view_mode, data):
+    """Build the base figure structure (without highlighting). Only runs when procedure/view changes."""
     df = pd.DataFrame(data)
     
-    # Ensure category_overrides is a dict
-    if category_overrides is None:
-        category_overrides = {}
-    
-    # --- Workflow Graph ---
     if procedure is None:
         # Combined view
         if view_mode == "performers":
-            workflow_fig = build_performers_only_combined_figure(df, highlight_track, category_overrides)
+            fig, arrow_info = build_performers_only_combined_figure_base(df)
         else:
-            workflow_fig = build_combined_interdependence_figure(df, highlight_track, category_overrides)
+            fig, arrow_info = build_combined_interdependence_figure_base(df)
     else:
         # Single procedure view
-        if highlight_track == "none":
-            highlight_track_val = None
-        else:
-            highlight_track_val = highlight_track
-        
         if view_mode == "performers":
-            figures = build_performers_only_figures(df, highlight_track_val, category_overrides)
+            fig, arrow_info = build_performers_only_figure_base(df, procedure)
         else:
-            figures = build_interdependence_figures(df, highlight_track_val, category_overrides)
-        
-        workflow_fig = figures.get(procedure, go.Figure())
+            fig, arrow_info = build_interdependence_figure_base(df, procedure)
     
-    return workflow_fig
+    return fig.to_dict(), arrow_info
+
+
+@app.callback(
+    Output("interdependence-graph", "figure"),
+    Input("base-figure-store", "data"),
+    Input("arrow-indices-store", "data"),
+    Input("highlight-selector", "value"),
+    Input("category-overrides-store", "data"),
+    Input("procedure-dropdown", "value"),
+    State("responsibility-table", "data")
+)
+def apply_highlighting(base_fig_dict, arrow_info, highlight_track, category_overrides, procedure, data):
+    """Apply highlighting to the cached base figure. Fast operation - just updates colors/widths."""
+    if base_fig_dict is None:
+        return go.Figure()
+    
+    fig = go.Figure(base_fig_dict)
+    
+    if arrow_info is None or highlight_track == "none":
+        # Still need to check for category overrides even when highlight_track is "none"
+        if not category_overrides:
+            return fig
+    
+    df = pd.DataFrame(data)
+    if category_overrides is None:
+        category_overrides = {}
+    
+    # Build the highlight track list based on current settings
+    if procedure is not None:
+        df_filtered = df[df["Procedure"] == procedure].reset_index(drop=True)
+    else:
+        df_filtered = df.reset_index(drop=True)
+    
+    df_filtered["task_idx"] = df_filtered.index
+    
+    highlight_track_list = []
+    for idx, row in df_filtered.iterrows():
+        task_idx = row["task_idx"]
+        agent_colors = {
+            "HUMAN*": row["Human*"].strip().lower() if isinstance(row["Human*"], str) else "",
+            "TARS*": row["TARS*"].strip().lower() if isinstance(row["TARS*"], str) else "",
+        }
+        chosen_agent = get_chosen_agent_with_override(row, highlight_track, category_overrides, agent_colors)
+        if chosen_agent:
+            highlight_track_list.append((task_idx, chosen_agent))
+    
+    # Determine if support arrows should be highlighted based on highlight mode
+    # "full_support" modes highlight support arrows, "no support" modes don't
+    should_highlight_support = highlight_track in ["human_full_support", "agent_whenever_possible_full_support", "most_reliable"]
+    
+    # Apply highlighting to shapes (dashed arrows - support relationships)
+    if "shapes" in fig.layout and fig.layout.shapes:
+        shapes = list(fig.layout.shapes)
+        for i, shape_info in enumerate(arrow_info.get("dashed_arrows", [])):
+            if i < len(shapes):
+                task_idx = shape_info["task"]
+                end_agent = shape_info["end_agent"]
+                
+                # Dashed arrows should only be highlighted if:
+                # 1. We're in a "full_support" mode AND
+                # 2. The performer at this task matches the highlighted path
+                is_highlighted = False
+                if should_highlight_support and (task_idx, end_agent) in highlight_track_list:
+                    is_highlighted = True
+                
+                shapes[i].line.color = "crimson" if is_highlighted else "black"
+                shapes[i].line.width = 4 if is_highlighted else 2
+        fig.layout.shapes = shapes
+    
+    # Apply highlighting to annotations (black-to-black arrows - performer transitions)
+    if "annotations" in fig.layout and fig.layout.annotations:
+        annotations = list(fig.layout.annotations)
+        for i, arrow_data in enumerate(arrow_info.get("black_to_black_arrows", [])):
+            if i < len(annotations):
+                start_task = arrow_data["start_task"]
+                start_agent = arrow_data["start_agent"]
+                end_task = arrow_data["end_task"]
+                end_agent = arrow_data["end_agent"]
+                
+                # Check if this arrow is part of the highlighted path
+                is_highlighted = (start_task, start_agent) in highlight_track_list and \
+                                 (end_task, end_agent) in highlight_track_list
+                
+                annotations[i].arrowcolor = "crimson" if is_highlighted else "black"
+                annotations[i].arrowwidth = 4 if is_highlighted else 2
+        fig.layout.annotations = annotations
+    
+    return fig
 
 
 @app.callback(
