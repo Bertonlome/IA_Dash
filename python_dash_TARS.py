@@ -249,21 +249,24 @@ def build_performers_only_figure_base(df, procedure):
             dots.append({"task": task_idx, "agent": "TARS*", "shape": "circle", "color": tars_performer_val, "role": "performer"})
             black_points.append("TARS*")
         
-        # TARS supporter (square)
+        # TARS supporter (square in TARS* column)
         tars_supporter_val = row["TARS"].strip().lower() if isinstance(row["TARS"], str) and row["TARS"] else ""
         if tars_supporter_val in VALID_COLORS and tars_supporter_val != "red":
             dots.append({"task": task_idx, "agent": "TARS*", "shape": "square", "color": tars_supporter_val, "role": "supporter"})
         
-        # HUMAN supporter (square)
+        # HUMAN supporter (square in HUMAN* column)
         human_supporter_val = row["Human"].strip().lower() if isinstance(row["Human"], str) and row["Human"] else ""
         if human_supporter_val in VALID_COLORS and human_supporter_val != "red":
             dots.append({"task": task_idx, "agent": "HUMAN*", "shape": "square", "color": human_supporter_val, "role": "supporter"})
         
-        # Dashed arrows for support relationships
-        if "TARS*" in black_points and tars_supporter_val in VALID_COLORS and tars_supporter_val != "red":
-            dashed_arrows.append({"start_agent": "TARS*", "end_agent": "TARS*", "task": task_idx, "is_support": True})
-        if "HUMAN*" in black_points and human_supporter_val in VALID_COLORS and human_supporter_val != "red":
-            dashed_arrows.append({"start_agent": "HUMAN*", "end_agent": "HUMAN*", "task": task_idx, "is_support": True})
+        # Dashed arrows for support relationships (going BETWEEN columns)
+        # TARS supporter helps HUMAN* performer: arrow from TARS* to HUMAN*
+        if "HUMAN*" in black_points and tars_supporter_val in VALID_COLORS and tars_supporter_val != "red":
+            dashed_arrows.append({"start_agent": "TARS*", "end_agent": "HUMAN*", "task": task_idx, "is_support": True})
+        
+        # HUMAN supporter helps TARS* performer: arrow from HUMAN* to TARS*
+        if "TARS*" in black_points and human_supporter_val in VALID_COLORS and human_supporter_val != "red":
+            dashed_arrows.append({"start_agent": "HUMAN*", "end_agent": "TARS*", "task": task_idx, "is_support": True})
     
     # Black-to-black arrows between consecutive tasks
     for i in range(len(proc_df) - 1):
@@ -290,23 +293,44 @@ def build_performers_only_figure_base(df, procedure):
                 marker=dict(size=30, color=dot["color"]), showlegend=False,
                 hoverinfo="text", hovertext=hover_text
             ))
-        else:  # square
+        else:  # square - add black border for visibility
+            # Draw black border square first
             fig.add_trace(go.Scatter(
                 x=[agent_pos[dot["agent"]]], y=[dot["task"]], mode="markers",
-                marker=dict(size=15, color=dot["color"], symbol="square"),
+                marker=dict(size=18, color="black", symbol="square"),
+                showlegend=False, hoverinfo="skip"
+            ))
+            # Draw colored square on top
+            fig.add_trace(go.Scatter(
+                x=[agent_pos[dot["agent"]]], y=[dot["task"]], mode="markers",
+                marker=dict(size=14, color=dot["color"], symbol="square"),
                 showlegend=False, hoverinfo="text", hovertext=hover_text
             ))
     
     # Add dashed arrows (shapes) - stored for later highlighting
+    # Group by task to apply vertical offset when there are two arrows at same task
     dashed_arrow_info = []
+    arrows_by_task = {}
     for arrow in dashed_arrows:
-        fig.add_shape(
-            type="line",
-            x0=agent_pos[arrow["start_agent"]], y0=arrow["task"],
-            x1=agent_pos[arrow["end_agent"]], y1=arrow["task"],
-            line=dict(color="black", width=2, dash="dot")
-        )
-        dashed_arrow_info.append({"task": arrow["task"], "end_agent": arrow["end_agent"]})
+        task = arrow["task"]
+        if task not in arrows_by_task:
+            arrows_by_task[task] = []
+        arrows_by_task[task].append(arrow)
+    
+    for task, task_arrows in arrows_by_task.items():
+        if len(task_arrows) == 2:
+            offsets = [-0.08, 0.08]  # Vertical offset for distinguishability
+        else:
+            offsets = [0] * len(task_arrows)
+        
+        for arrow, offset in zip(task_arrows, offsets):
+            fig.add_shape(
+                type="line",
+                x0=agent_pos[arrow["start_agent"]], y0=arrow["task"] + offset,
+                x1=agent_pos[arrow["end_agent"]], y1=arrow["task"] + offset,
+                line=dict(color="black", width=2, dash="dot")
+            )
+            dashed_arrow_info.append({"task": arrow["task"], "end_agent": arrow["end_agent"], "offset": offset})
     
     # Add black-to-black arrows (annotations) - stored for later highlighting
     for arrow in black_to_black_arrows:
@@ -365,10 +389,14 @@ def build_performers_only_combined_figure_base(df):
         if human_supporter_val in VALID_COLORS and human_supporter_val != "red":
             dots.append({"task": task_idx, "agent": "HUMAN*", "shape": "square", "color": human_supporter_val, "role": "supporter"})
         
-        if "TARS*" in black_points and tars_supporter_val in VALID_COLORS and tars_supporter_val != "red":
-            dashed_arrows.append({"start_agent": "TARS*", "end_agent": "TARS*", "task": task_idx, "is_support": True})
-        if "HUMAN*" in black_points and human_supporter_val in VALID_COLORS and human_supporter_val != "red":
-            dashed_arrows.append({"start_agent": "HUMAN*", "end_agent": "HUMAN*", "task": task_idx, "is_support": True})
+        # Dashed arrows for support relationships (going BETWEEN columns)
+        # TARS supporter helps HUMAN* performer: arrow from TARS* to HUMAN*
+        if "HUMAN*" in black_points and tars_supporter_val in VALID_COLORS and tars_supporter_val != "red":
+            dashed_arrows.append({"start_agent": "TARS*", "end_agent": "HUMAN*", "task": task_idx, "is_support": True})
+        
+        # HUMAN supporter helps TARS* performer: arrow from HUMAN* to TARS*
+        if "TARS*" in black_points and human_supporter_val in VALID_COLORS and human_supporter_val != "red":
+            dashed_arrows.append({"start_agent": "HUMAN*", "end_agent": "TARS*", "task": task_idx, "is_support": True})
     
     for i in range(len(df) - 1):
         current_performers = [d["agent"] for d in dots if d["task"] == i and d["shape"] == "circle"]
@@ -390,22 +418,43 @@ def build_performers_only_combined_figure_base(df):
                 marker=dict(size=40, color=dot["color"]), showlegend=False,
                 hoverinfo="text", hovertext=hover_text
             ))
-        else:
+        else:  # square - add black border for visibility
+            # Draw black border square first
             fig.add_trace(go.Scatter(
                 x=[agent_pos[dot["agent"]]], y=[dot["task"]], mode="markers",
-                marker=dict(size=17, color=dot["color"], symbol="square"),
+                marker=dict(size=20, color="black", symbol="square"),
+                showlegend=False, hoverinfo="skip"
+            ))
+            # Draw colored square on top
+            fig.add_trace(go.Scatter(
+                x=[agent_pos[dot["agent"]]], y=[dot["task"]], mode="markers",
+                marker=dict(size=16, color=dot["color"], symbol="square"),
                 showlegend=False, hoverinfo="text", hovertext=hover_text
             ))
     
+    # Group dashed arrows by task for vertical offset when overlapping
     dashed_arrow_info = []
+    arrows_by_task = {}
     for arrow in dashed_arrows:
-        fig.add_shape(
-            type="line",
-            x0=agent_pos[arrow["start_agent"]], y0=arrow["task"],
-            x1=agent_pos[arrow["end_agent"]], y1=arrow["task"],
-            line=dict(color="black", width=2, dash="dot")
-        )
-        dashed_arrow_info.append({"task": arrow["task"], "end_agent": arrow["end_agent"]})
+        task = arrow["task"]
+        if task not in arrows_by_task:
+            arrows_by_task[task] = []
+        arrows_by_task[task].append(arrow)
+    
+    for task, task_arrows in arrows_by_task.items():
+        if len(task_arrows) == 2:
+            offsets = [-0.08, 0.08]  # Vertical offset for distinguishability
+        else:
+            offsets = [0] * len(task_arrows)
+        
+        for arrow, offset in zip(task_arrows, offsets):
+            fig.add_shape(
+                type="line",
+                x0=agent_pos[arrow["start_agent"]], y0=arrow["task"] + offset,
+                x1=agent_pos[arrow["end_agent"]], y1=arrow["task"] + offset,
+                line=dict(color="black", width=2, dash="dot")
+            )
+            dashed_arrow_info.append({"task": arrow["task"], "end_agent": arrow["end_agent"], "offset": offset})
     
     for arrow in black_to_black_arrows:
         fig.add_annotation(
