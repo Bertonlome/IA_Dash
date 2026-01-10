@@ -361,7 +361,7 @@ def build_performers_only_combined_figure_base(df):
     df = df.reset_index(drop=True)
     df["task_idx"] = df.index
     tasks = df["Task Object"].tolist()
-    height = 600 + len(tasks) * 100
+    height = len(tasks) * 100
     
     dots = []
     dashed_arrows = []
@@ -567,7 +567,7 @@ def build_combined_interdependence_figure_base(df):
     df = df.reset_index(drop=True)
     df["task_idx"] = df.index
     tasks = df["Task Object"].tolist()
-    height = 600 + len(tasks) * 100
+    height = len(tasks) * 90
     
     dots = []
     dashed_arrows = []
@@ -1624,6 +1624,23 @@ def interdependence_analysis_page():
             })
         ]),
 
+        # Automation Proportion Summary Box
+        html.Div([
+            html.Div([
+                html.Span("Automation Proportion: ", style={"fontSize": "16px", "fontWeight": "bold"}),
+                html.Span(id="ap-summary-value", children="--", style={"fontSize": "20px", "fontWeight": "bold", "color": "#2196F3"}),
+            ], style={"display": "inline-block", "marginRight": "20px"}),
+            html.A("See methodology details below ↓", href="#automation-proportion-section", 
+                   style={"fontSize": "12px", "color": "#666", "textDecoration": "underline"})
+        ], style={
+            "textAlign": "center",
+            "padding": "15px",
+            "backgroundColor": "#e3f2fd",
+            "borderRadius": "8px",
+            "marginBottom": "20px",
+            "border": "1px solid #90caf9"
+        }),
+
         # Hidden store for category override values
         dcc.Store(id="category-overrides-store", data={}),
         
@@ -1644,6 +1661,67 @@ def interdependence_analysis_page():
             dcc.Graph(id="allocation-type-bar-chart"),
             dcc.Graph(id="agent-autonomy-bar-chart")
         ]),
+
+        # Automation Proportion Section
+        html.Div(id="automation-proportion-section", children=[
+            html.H2("Automation Proportion", style={"textAlign": "center", "marginTop": "40px"}),
+            
+            # Citation
+            html.Div([
+                html.P([
+                    html.B("Reference: "),
+                    "Liu, Y., & Kaber, D. B. (2025). Models of automation proportion in human-in-the-loop systems and operator situation awareness responses. ",
+                    html.I("Ergonomics"),
+                    ", 1–14. ",
+                    html.A("https://doi.org/10.1080/00140139.2025.2608273", 
+                           href="https://doi.org/10.1080/00140139.2025.2608273", 
+                           target="_blank")
+                ], style={"fontSize": "14px", "color": "#555", "marginBottom": "20px"})
+            ], style={"backgroundColor": "#f5f5f5", "padding": "15px", "borderRadius": "8px", "marginBottom": "25px"}),
+            
+            # Explanation
+            html.Div([
+                html.H4("Methodology", style={"marginBottom": "15px"}),
+                dcc.Markdown('''
+Let our categories be indexed as $k \\in \\{1, \\ldots, K\\}$ where $K$ is the number of categories.
+
+Let $C_k$ be the set of basic tasks in category $k$, and $T_k = |C_k|$ be the number of tasks in that category.
+
+**Task Weight Definition:**
+
+For each task $t$, we define an "automation-from-human-perspective" weight $w(t)$:
+
+| Task Allocation | Weight |
+|-----------------|--------|
+| **Manual** (HUMAN* performs alone) | $w(t) = 0$ |
+| **Supported** (HUMAN* performs with autonomy support) | $w(t) = 0.5$ |
+| **Delegated** (TARS* performs w/ or w/o human support) | $w(t) = 1$ |
+
+**Category Score (equal weight across tasks within category):**
+
+For each category $k$, compute the mean task weight:
+
+$$p_k = \\frac{1}{T_k} \\sum_{t \\in C_k} w(t)$$
+
+This produces $p_k \\in [0, 1]$ for each category.
+
+**Overall Automation Proportion (equal-weight categories):**
+
+$$P = \\frac{1}{K} \\sum_{k=1}^{K} p_k$$
+
+The resulting $P \\in [0, 1]$ represents the overall automation proportion, where:
+- $P = 0$ means fully manual operation
+- $P = 1$ means fully delegated to automation
+                ''', mathjax=True, style={"fontSize": "15px", "lineHeight": "1.8"})
+            ], style={"backgroundColor": "white", "padding": "20px", "borderRadius": "8px", "border": "1px solid #ddd", "marginBottom": "25px"}),
+            
+            # Computation results (dynamic)
+            html.Div([
+                html.H4("Computation for Current Selection", style={"marginBottom": "15px"}),
+                html.Div(id="automation-proportion-results")
+            ], style={"backgroundColor": "white", "padding": "20px", "borderRadius": "8px", "border": "1px solid #ddd"})
+            
+        ], style={"maxWidth": "900px", "margin": "0 auto", "padding": "20px"}),
 
         # Footer with copyright
         html.Footer(
@@ -1772,9 +1850,20 @@ def generate_category_overrides(data):
     # Get unique categories
     categories = sorted(df["Category"].dropna().unique())
     
-    # Create radio buttons for each category
+    # Create radio buttons for each category with mini bar charts
     category_controls = []
     for category in categories:
+        # Count assignable tasks per agent for this category
+        cat_df = df[df["Category"] == category]
+        human_assignable = sum(
+            1 for _, row in cat_df.iterrows()
+            if isinstance(row.get("Human*"), str) and row["Human*"].strip().lower() in ["green", "yellow", "orange"]
+        )
+        tars_assignable = sum(
+            1 for _, row in cat_df.iterrows()
+            if isinstance(row.get("TARS*"), str) and row["TARS*"].strip().lower() in ["green", "yellow", "orange"]
+        )
+        
         category_controls.append(
             html.Div([
                 html.Label(category, style={
@@ -1783,32 +1872,147 @@ def generate_category_overrides(data):
                     "display": "block",
                     "fontSize": "13px"
                 }),
-                dcc.RadioItems(
+                # Clickable bar chart for assignable tasks
+                dcc.Graph(
+                    id={"type": "category-bar-chart", "category": category},
+                    figure=go.Figure(
+                        data=[
+                            go.Bar(
+                                x=[tars_assignable],
+                                y=["TARS"],
+                                orientation='h',
+                                marker_color='grey',
+                                text=[tars_assignable],
+                                textposition='inside',
+                                textfont=dict(color='white', size=10),
+                                name="TARS",
+                                customdata=["TARS"]
+                            ),
+                            go.Bar(
+                                x=[human_assignable],
+                                y=["HUMAN"],
+                                orientation='h',
+                                marker_color='grey',
+                                text=[human_assignable],
+                                textposition='inside',
+                                textfont=dict(color='white', size=10),
+                                name="HUMAN",
+                                customdata=["HUMAN"]
+                            )
+                        ],
+                        layout=go.Layout(
+                            height=60,
+                            width=120,
+                            margin=dict(l=45, r=5, t=5, b=5),
+                            xaxis=dict(visible=False, range=[0, max(human_assignable, tars_assignable, 1) * 1.1]),
+                            yaxis=dict(tickfont=dict(size=9)),
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            showlegend=False,
+                            barmode='group',
+                            autosize=False
+                        )
+                    ),
+                    config={'displayModeBar': False},
+                    style={"marginTop": "5px", "height": "60px", "width": "120px", "cursor": "pointer"}
+                ),
+                # Store the counts for the callback
+                dcc.Store(
+                    id={"type": "category-counts", "category": category},
+                    data={"human": human_assignable, "tars": tars_assignable}
+                ),
+                # Store the current selection state (hidden radio replacement)
+                dcc.Store(
                     id={"type": "category-override", "category": category},
-                    options=[
-                        {"label": "Default", "value": "default"},
-                        {"label": "HUMAN", "value": "HUMAN"},
-                        {"label": "TARS", "value": "TARS"}
-                    ],
-                    value="default",
-                    labelStyle={'display': 'block', 'fontSize': '12px'},
-                    inputStyle={"marginRight": "5px"}
+                    data="default"
                 )
             ], style={
                 "backgroundColor": "white",
                 "padding": "10px 15px",
                 "borderRadius": "5px",
                 "border": "1px solid #ddd",
-                "minWidth": "120px"
+                "minWidth": "140px"
             })
         )
     
     return category_controls
 
+# Callback to handle bar click and toggle selection
+@app.callback(
+    Output({"type": "category-override", "category": dash.MATCH}, "data"),
+    Output({"type": "category-bar-chart", "category": dash.MATCH}, "figure"),
+    Input({"type": "category-bar-chart", "category": dash.MATCH}, "clickData"),
+    State({"type": "category-override", "category": dash.MATCH}, "data"),
+    State({"type": "category-counts", "category": dash.MATCH}, "data"),
+    prevent_initial_call=True
+)
+def toggle_category_selection(clickData, current_selection, counts):
+    if clickData is None or counts is None:
+        raise dash.exceptions.PreventUpdate
+    
+    # Get the clicked bar's label
+    clicked_label = clickData["points"][0].get("y", None)
+    if clicked_label is None:
+        raise dash.exceptions.PreventUpdate
+    
+    # Toggle logic: if clicking the same selection, deselect (back to default)
+    if current_selection == clicked_label:
+        new_selection = "default"
+    else:
+        new_selection = clicked_label
+    
+    human_count = counts.get("human", 0)
+    tars_count = counts.get("tars", 0)
+    
+    # Determine bar colors based on new selection
+    human_color = "dodgerblue" if new_selection == "HUMAN" else "grey"
+    tars_color = "dodgerblue" if new_selection == "TARS" else "grey"
+    
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=[tars_count],
+                y=["TARS"],
+                orientation='h',
+                marker_color=tars_color,
+                text=[tars_count],
+                textposition='inside',
+                textfont=dict(color='white', size=10),
+                name="TARS",
+                customdata=["TARS"]
+            ),
+            go.Bar(
+                x=[human_count],
+                y=["HUMAN"],
+                orientation='h',
+                marker_color=human_color,
+                text=[human_count],
+                textposition='inside',
+                textfont=dict(color='white', size=10),
+                name="HUMAN",
+                customdata=["HUMAN"]
+            )
+        ],
+        layout=go.Layout(
+            height=60,
+            width=120,
+            margin=dict(l=45, r=5, t=5, b=5),
+            xaxis=dict(visible=False, range=[0, max(human_count, tars_count, 1) * 1.1]),
+            yaxis=dict(tickfont=dict(size=9)),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            showlegend=False,
+            barmode='group',
+            autosize=False
+        )
+    )
+    
+    return new_selection, fig
+
 # Callback to collect all category overrides into a single store
 @app.callback(
     Output("category-overrides-store", "data"),
-    Input({"type": "category-override", "category": dash.ALL}, "value"),
+    Input({"type": "category-override", "category": dash.ALL}, "data"),
     State({"type": "category-override", "category": dash.ALL}, "id"),
     prevent_initial_call=True
 )
@@ -2529,6 +2733,165 @@ def handle_table(data, save_clicks, upload_contents, add_row_clicks, copy_clicks
         row_deletable=True,
     )
     return updated_table, save_message
+
+
+# Callback to compute Automation Proportion
+@app.callback(
+    Output("automation-proportion-results", "children"),
+    Output("ap-summary-value", "children"),
+    Output("ap-summary-value", "style"),
+    Input("highlight-selector", "value"),
+    Input("category-overrides-store", "data"),
+    State("responsibility-table", "data")
+)
+def compute_automation_proportion(highlight_track, category_overrides, data):
+    default_style = {"fontSize": "20px", "fontWeight": "bold", "color": "#888"}
+    
+    if not data or highlight_track == "none":
+        return (
+            html.P("Select a highlight track to compute the Automation Proportion.", 
+                   style={"color": "#888", "fontStyle": "italic"}),
+            "--",
+            default_style
+        )
+    
+    if category_overrides is None:
+        category_overrides = {}
+    
+    df = pd.DataFrame(data)
+    
+    if "Category" not in df.columns:
+        return html.P("Category column not found in data.", style={"color": "red"})
+    
+    categories = sorted(df["Category"].dropna().unique())
+    K = len(categories)
+    
+    if K == 0:
+        return (html.P("No categories found.", style={"color": "red"}), "--", default_style)
+    
+    category_results = []
+    category_scores = []
+    
+    for category in categories:
+        cat_df = df[df["Category"] == category]
+        Tk = len(cat_df)
+        
+        if Tk == 0:
+            continue
+        
+        weights = []
+        task_details = []
+        
+        for _, row in cat_df.iterrows():
+            task_name = row.get("Task Object", "Unknown")
+            
+            # Get agent colors
+            agent_colors = {
+                "HUMAN*": row["Human*"].strip().lower() if isinstance(row.get("Human*"), str) else "",
+                "TARS*": row["TARS*"].strip().lower() if isinstance(row.get("TARS*"), str) else "",
+            }
+            
+            # Determine chosen agent using the same logic as highlighting
+            chosen_agent = get_chosen_agent_with_override(row, highlight_track, category_overrides, agent_colors)
+            
+            # Determine if there's TARS support for HUMAN* performer
+            # Only applies to human-focused modes (human_full_support)
+            # In agent-focused modes, the support direction is HUMAN→TARS*, which doesn't affect automation level
+            tars_supporter_color = row["TARS"].strip().lower() if isinstance(row.get("TARS"), str) else ""
+            is_human_focused_support = highlight_track == "human_full_support"
+            has_tars_support = is_human_focused_support and chosen_agent == "HUMAN*" and tars_supporter_color in ["green", "yellow", "orange"]
+            
+            # Calculate weight
+            if chosen_agent == "TARS*":
+                w = 1.0  # Delegated (same regardless of HUMAN support)
+                allocation = "Delegated"
+            elif chosen_agent == "HUMAN*" and has_tars_support:
+                w = 0.5  # Supported (only in human_full_support mode)
+                allocation = "Supported"
+            elif chosen_agent == "HUMAN*":
+                w = 0.0  # Manual
+                allocation = "Manual"
+            else:
+                w = 0.0  # Default to manual if no performer
+                allocation = "Unassigned"
+            
+            weights.append(w)
+            task_details.append({"task": task_name, "weight": w, "allocation": allocation, "performer": chosen_agent or "None"})
+        
+        # Category score
+        pk = sum(weights) / Tk if Tk > 0 else 0
+        category_scores.append(pk)
+        
+        category_results.append({
+            "category": category,
+            "Tk": Tk,
+            "pk": pk,
+            "tasks": task_details
+        })
+    
+    # Overall Automation Proportion
+    P = sum(category_scores) / K if K > 0 else 0
+    
+    # Build the display
+    highlight_label = {
+        "human_baseline": "Human-performer-only (no support)",
+        "human_full_support": "Human-performer-only (full support)",
+        "agent_whenever_possible": "Agent-whenever-possible (no support)",
+        "agent_whenever_possible_full_support": "Agent-whenever-possible (full support)",
+        "most_reliable": "Most reliable path"
+    }.get(highlight_track, highlight_track)
+    
+    # Category breakdown table
+    category_table_rows = []
+    for result in category_results:
+        category_table_rows.append(
+            html.Tr([
+                html.Td(result["category"], style={"padding": "8px", "borderBottom": "1px solid #ddd"}),
+                html.Td(str(result["Tk"]), style={"padding": "8px", "borderBottom": "1px solid #ddd", "textAlign": "center"}),
+                html.Td(f"{result['pk']:.3f}", style={"padding": "8px", "borderBottom": "1px solid #ddd", "textAlign": "center"})
+            ])
+        )
+    
+    detailed_results = html.Div([
+        html.P([html.B("Selected Track: "), highlight_label], style={"marginBottom": "15px"}),
+        
+        # Override info if any
+        html.Div([
+            html.P([html.B("Category Overrides Applied: "), 
+                   ", ".join([f"{k}→{v}" for k, v in category_overrides.items()]) if category_overrides else "None"],
+                  style={"marginBottom": "15px", "color": "#666"})
+        ]) if category_overrides else None,
+        
+        # Category scores table
+        html.Table([
+            html.Thead(html.Tr([
+                html.Th("Category", style={"padding": "10px", "borderBottom": "2px solid #333", "textAlign": "left"}),
+                html.Th("Tasks (Tₖ)", style={"padding": "10px", "borderBottom": "2px solid #333", "textAlign": "center"}),
+                html.Th("Score (pₖ)", style={"padding": "10px", "borderBottom": "2px solid #333", "textAlign": "center"})
+            ])),
+            html.Tbody(category_table_rows)
+        ], style={"width": "100%", "borderCollapse": "collapse", "marginBottom": "20px"}),
+        
+        # Final result
+        html.Div([
+            dcc.Markdown(f'''
+**Computation:**
+
+$$P = \\frac{{1}}{{{K}}} \\sum_{{k=1}}^{{{K}}} p_k = \\frac{{1}}{{{K}}} \\times {sum(category_scores):.3f} = \\mathbf{{{P:.3f}}}$$
+            ''', mathjax=True),
+            html.Div([
+                html.Span(f"Automation Proportion: ", style={"fontSize": "18px"}),
+                html.Span(f"{P:.1%}", style={"fontSize": "24px", "fontWeight": "bold", 
+                                              "color": "#2196F3" if P > 0.5 else "#4CAF50" if P < 0.5 else "#FF9800"})
+            ], style={"textAlign": "center", "padding": "15px", "backgroundColor": "#f9f9f9", "borderRadius": "8px", "marginTop": "15px"})
+        ])
+    ])
+    
+    # Summary value and style for the top box
+    summary_color = "#2196F3" if P > 0.5 else "#4CAF50" if P < 0.5 else "#FF9800"
+    summary_style = {"fontSize": "20px", "fontWeight": "bold", "color": summary_color}
+    
+    return detailed_results, f"{P:.1%}", summary_style
 
 
 if __name__ == "__main__":
