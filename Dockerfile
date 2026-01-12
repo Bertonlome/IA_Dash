@@ -7,12 +7,12 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files explicitly
-COPY python_dash_ia.py ./
-COPY table_hat_game.csv ./
+COPY python_dash_TARS.py ./
+COPY V6 ./V6
 COPY assets ./assets
 
 # Expose port 7860 (Hugging Face Spaces default)
 EXPOSE 7860
 
 # Run the application with gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "1", "--threads", "2", "--timeout", "120", "python_dash_ia:server"]
+CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "1", "--threads", "2", "--timeout", "120", "python_dash_TARS:server"]
