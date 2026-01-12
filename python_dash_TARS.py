@@ -10,6 +10,7 @@ import base64
 import io
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=['assets/styles.css'])
+server = app.server
 
 # Navigation menu component
 def create_navbar(current_pathname="/"):
