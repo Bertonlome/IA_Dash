@@ -1,5 +1,5 @@
 # TBD Todo Lists
-[ ] Compute Automation Proportion according to Liu & Kaber (2025)
+[x] Compute Automation Proportion according to Liu & Kaber (2025)
 
 
 # Coactive Design : Designing Support for Interdependence in Human-Robot Teamwork Johnson PhD. Thesis
