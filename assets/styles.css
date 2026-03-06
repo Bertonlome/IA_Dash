@@ -1,36 +1,421 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — edit these to re-skin the whole dashboard
+   ═══════════════════════════════════════════════════════════════════════════════ */
+:root {
+    /* Background & surfaces */
+    --bg:            #f3f0eb;
+    --surface:       #f7f7f5;
+    --surface-alt:   #f7f7f5;
+
+    /* Palette */
+    --red:           #b40606;
+    --orange:        #d95e21;
+    --yellow:        #f5e74e;
+    --green:         #1b7f41;
+
+    /* Neutrals */
+    --ink:           #1a1a1a;
+    --ink-secondary: #2d2d2d;
+    --ink-muted:     #313131;
+    --border:        #b0ada6;
+    --border-light:  #c8c5be;
+
+    /* Accent (for highlights, links, selected states) */
+    --accent:        #b42806;
+
+    /* Typography */
+    --font-body:     'Space Grotesk', 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    --font-display:  'Space Grotesk', 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    --font-mono:     'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   RESET & BASE
+   ═══════════════════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg) !important;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    color: var(--ink);
+}
+
+p { color: var(--ink-secondary); }
+
+hr {
+    border: none;
+    border-top: 2px solid var(--ink);
+    margin: 2rem 0;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   STICKY NAVIGATION HEADER
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background-color: var(--ink);
+    border-bottom: 3px solid var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 3vw;
+    height: 54px;
+    width: 100%;
+}
+
+.sticky-nav .nav-brand {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--bg);
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.sticky-nav .nav-brand:hover {
+    text-decoration: none;
+    opacity: 0.85;
+}
+
+.sticky-nav .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
 .nav-link {
-    padding: 10px 20px !important;
-    font-family: 'Roboto', sans-serif !important;
+    padding: 0 18px !important;
+    height: 54px !important;
+    line-height: 54px !important;
+    font-family: var(--font-body) !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
     text-decoration: none !important;
-    color: black !important;
-    border-radius: 5px !important;
-    margin-right: 10px !important;
-    transition: all 0.3s ease !important;
-    display: inline-block !important;
+    color: var(--bg) !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    transition: background-color 0.15s ease !important;
+    display: inline-flex !important;
+    align-items: center !important;
 }
 
 .nav-link:hover {
-    background-color: #cacaca !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
+    background-color: rgba(231, 228, 223, 0.12) !important;
+    transform: none !important;
+    box-shadow: none !important;
     text-decoration: none !important;
 }
 
 .nav-link:active {
-    background-color: #cacaca !important;
-    transform: translateY(0) !important;
+    background-color: rgba(231, 228, 223, 0.18) !important;
+    transform: none !important;
     text-decoration: none !important;
 }
 
-/* Active page styling */
 .nav-link.active {
-    text-decoration: underline !important;
-    font-weight: bold !important;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+    border-bottom: 3px solid var(--accent) !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    box-shadow: none !important;
 }
 
-/* Ensure active state overrides hover */
 .nav-link.active:hover {
-    text-decoration: underline !important;
-    background-color: #d1e7ff !important;
+    text-decoration: none !important;
+    background-color: rgba(231, 228, 223, 0.12) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BUTTONS
+   ═══════════════════════════════════════════════════════════════════════════════ */
+button, .btn {
+    font-family: var(--font-body) !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    padding: 10px 24px !important;
+    border: 2px solid var(--ink) !important;
+    border-radius: 0 !important;
+    background-color: transparent !important;
+    color: var(--ink) !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+}
+
+button:hover, .btn:hover {
+    background-color: var(--ink) !important;
+    color: var(--bg) !important;
+}
+
+button.btn-primary, .btn-primary {
+    background-color: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: #fff !important;
+}
+
+button.btn-primary:hover, .btn-primary:hover {
+    background-color: #8c1f04 !important;
+    border-color: #8c1f04 !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SECTION STRUCTURE
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.section {
+    padding: 3rem 3vw;
+    border-top: 2px solid var(--ink);
+}
+
+.section:first-of-type {
+    border-top: none;
+}
+
+.section-number {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.5rem;
+}
+
+.section-title {
+    font-size: clamp(1.8rem, 3vw, 2.6rem);
+    margin: 0 0 1.5rem 0;
+    font-weight: 700;
+}
+
+.section-subtitle {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--ink-secondary);
+    margin: 0 0 2rem 0;
+    max-width: 700px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CARDS & PANELS
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.card {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.card-alt {
+    background-color: var(--surface-alt);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.card-header {
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--ink);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   DATA TABLE OVERRIDES
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Hide the DataTable built-in "Toggle Columns" button */
+.show-hide {
+    display: none !important;
+}
+
+/* Table container — full width, no breakout hack needed */
+.dash-spreadsheet-container {
+    border: 2px solid var(--ink) !important;
+}
+
+.dash-table-container .dash-spreadsheet-container table {
+    font-family: var(--font-body) !important;
+    font-size: 13px !important;
+}
+
+.dash-header {
+    font-family: var(--font-display) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   UPLOAD ZONE
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.upload-zone {
+    border: 2px dashed var(--border) !important;
+    background-color: var(--surface) !important;
+    transition: border-color 0.15s ease;
+    padding: 1.5rem !important;
+    text-align: center;
+}
+
+.upload-zone:hover {
+    border-color: var(--accent) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   DETAILS / ACCORDION
+   ═══════════════════════════════════════════════════════════════════════════════ */
+details {
+    border-top: 2px solid var(--ink);
+    padding-top: 0.5rem;
+}
+
+details > summary {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.1rem;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    padding: 0.75rem 0;
+    user-select: none;
+    text-transform: uppercase;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   AUTOMATION PROPORTION BOX
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.ap-box {
+    border: 2px solid var(--ink);
+    padding: 1rem 2rem;
+    display: inline-block;
+    background-color: var(--surface);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CATEGORY OVERRIDE CARDS
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.category-card {
+    display: inline-block;
+    width: 220px;
+    vertical-align: top;
+    margin: 4px;
+    border: 1px solid var(--border);
+    padding: 3px;
+    background-color: var(--surface);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.site-footer {
+    border-top: 2px solid var(--ink);
+    padding: 2rem 3vw;
+    font-size: 13px;
+    color: var(--ink-muted);
+    text-align: center;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   DROPDOWNS & INPUTS
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Only style the explicit setup-form inputs, not DataTable cell editors */
+.card input[type="text"],
+.card-alt input[type="text"],
+.card input:not([type]),
+.card-alt input:not([type]) {
+    border: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+    font-family: var(--font-body) !important;
+    background-color: var(--bg) !important;
+    padding: 6px 8px !important;
+}
+
+.card input[type="text"]:focus,
+.card-alt input[type="text"]:focus,
+.card input:not([type]):focus,
+.card-alt input:not([type]):focus {
+    border-color: var(--ink) !important;
+    outline: none !important;
+}
+
+/* Dash dcc.Dropdown — reset internal borders so they don't double-render */
+.Select-control {
+    border-radius: 0 !important;
+    font-family: var(--font-body) !important;
+    background-color: var(--bg) !important;
+}
+
+/* Inside DataTable cells, the Select control must match the cell background */
+.dash-spreadsheet .Select-control {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Editing inputs blend into the cell — use CSS custom property set on td */
+.dash-spreadsheet input {
+    border: none !important;
+    background-color: var(--cell-bg, transparent) !important;
+    color: inherit !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    .sticky-nav {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 0.5rem 1rem;
+    }
+    .sticky-nav .nav-links { flex-wrap: wrap; }
+    .nav-link {
+        height: auto !important;
+        line-height: 2.2 !important;
+        padding: 0 12px !important;
+        font-size: 12px !important;
+    }
+    .section { padding: 2rem 1rem; }
 }
