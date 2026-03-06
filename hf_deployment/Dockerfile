@@ -11,9 +11,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY python_dash_IA.py .
+COPY python_dash_generic.py .
 COPY app.py .
-COPY table_hat_game.csv .
+COPY IA_V7.csv .
 COPY assets/ ./assets/
 
 # Expose port 7860 (Hugging Face Spaces default)
