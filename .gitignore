@@ -36,3 +36,7 @@ Thumbs.db
 # Local test files
 test_*.py
 *_test.py
+
+old_stuff/
+
+hf_deployment/
