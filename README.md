@@ -9,7 +9,7 @@
 
 The **Interdependence Analysis (IA) Dashboard** is an open-source web application built with [Plotly Dash](https://dash.plotly.com/) that supports the practice of **Interdependence Analysis (IA)**, a core method in **Coactive Design** for engineering effective Human–Autonomy Teams (HAT).
 
-The dashboard provides an interactive environment for loading, visualizing, and editing IA tables — structured matrices that map a task analysis to Observability, Predictability, and Directability (OPD) teaming requirements needed for each team configuration alternative.
+The dashboard provides an interactive environment for loading, visualizing, and editing IA tables.
 
 The tool is designed to facilitate the jump from theory to practice: rather than working through IA tables in spreadsheets, users can directly interact with a purpose-built interface.
 
@@ -93,7 +93,7 @@ This tool is part of the **Coactive Design** process developed by Johnson, and a
 
 The IA also lead the designer to ask, for every task and every team configuration alternative:
 
-> *What needs to be observable from whom, what needs to be predictable from whom, and what needs to be directable to whom?*
+> *What needs to be observed from whom, what needs to be predicted from whom, and what needs to be directed to whom?*
 
 The color coding scheme:
 
@@ -122,7 +122,7 @@ Feedback from researchers, and practitioners is welcome.
 
 ## Citation
 
-If you use this software for research or teaching, please cite:
+If you use this software please cite:
 
 > Berton, B., & Doyon-Poulin, P. (2026). *Interdependence Analysis Dashboard (Version 1.0)* [Software]. Zenodo. https://doi.org/10.5281/zenodo.XXXXXXX
 
