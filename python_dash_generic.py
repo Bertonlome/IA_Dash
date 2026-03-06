@@ -409,22 +409,24 @@ def build_borders(config):
 
 
 def style_table(df, config):
-    """Conditional styles: color cells match their value."""
+    """Conditional styles: color cells match their value.
+    Uses filter_query so styles update live when the user edits a cell.
+    """
     agent_cols = get_agent_columns(config)
     styles = []
-    for i, row in df.iterrows():
-        for col in agent_cols:
-            if col in df.columns:
-                val = row[col]
-                if isinstance(val, str) and val.strip().lower() in VALID_COLORS:
-                    color = val.strip().lower()
-                    styles.append({
-                        "if": {"row_index": i, "column_id": col},
-                        "backgroundColor": color,
-                        "color": color,
-                        "textAlign": "center",
-                        "fontWeight": "bold",
-                    })
+    for col in agent_cols:
+        for color in VALID_COLORS:
+            for variant in [color, color.capitalize(), color.upper()]:
+                styles.append({
+                    "if": {
+                        "filter_query": f"{{{col}}} = '{variant}'",
+                        "column_id": col,
+                    },
+                    "backgroundColor": color,
+                    "color": color,
+                    "textAlign": "center",
+                    "fontWeight": "bold",
+                })
     return styles
 
 
@@ -630,21 +632,32 @@ def build_workflow_figure_base(df, config, procedure=None, view_mode="full"):
 
     agent_pos = {agent: i for i, agent in enumerate(agent_cols)}
 
-    dots = []
+    dots = []          # {task, y, agent, color}
+    hover_lookup = {}  # (task_idx, col) -> hover text
     dashed_arrows = []
-    solid_arrows = []
 
     # ── Per-task processing ───────────────────────────────────────────────
     for i, row in df.iterrows():
         task_idx = row["task_idx"]
         yp = y_pos[task_idx]
+        task_label = wrap_text(str(row.get(task_col, "")))
 
-        # Place dots
+        # Place dots + precompute hover text
         for col in agent_cols:
             if col in df.columns:
                 val = str(row.get(col, "") or "").strip().lower()
                 if val in VALID_COLORS:
                     dots.append({"task": task_idx, "y": yp, "agent": col, "color": val})
+                    hover_parts = [
+                        f"<b>Task:</b> {task_label}",
+                        f"<b>Agent:</b> {col}",
+                    ]
+                    for meta in ["Observability", "Predictability", "Directability"]:
+                        if meta in df.columns:
+                            hover_parts.append(
+                                f"<b>{meta}:</b><br>{wrap_text(str(row.get(meta, '')))}"
+                            )
+                    hover_lookup[(task_idx, col)] = "<br><br>".join(hover_parts)
 
         # Dashed arrows: supporter → performer within each alternative
         for alt in config["alternatives"]:
@@ -667,17 +680,15 @@ def build_workflow_figure_base(df, config, procedure=None, view_mode="full"):
                             })
 
     # ── Solid arrows between consecutive tasks ────────────────────────────
+    performers_by_task = {}
+    for d in dots:
+        if d["agent"] in performer_cols and d["color"] != "red":
+            performers_by_task.setdefault(d["task"], set()).add(d["agent"])
+
+    solid_arrows = []
     for i in range(1, len(df)):
-        prev_perfs = list({
-            d["agent"] for d in dots
-            if d["task"] == i - 1 and d["agent"] in performer_cols and d["color"] != "red"
-        })
-        curr_perfs = list({
-            d["agent"] for d in dots
-            if d["task"] == i and d["agent"] in performer_cols and d["color"] != "red"
-        })
-        for pa in prev_perfs:
-            for ca in curr_perfs:
+        for pa in performers_by_task.get(i - 1, set()):
+            for ca in performers_by_task.get(i, set()):
                 solid_arrows.append({
                     "start_task": i - 1, "start_y": y_pos[i - 1], "start_agent": pa,
                     "end_task": i,   "end_y":   y_pos[i],     "end_agent": ca,
@@ -708,25 +719,23 @@ def build_workflow_figure_base(df, config, procedure=None, view_mode="full"):
             borderpad=4,
         )
 
-    for dot in dots:
-        row_data = df.iloc[dot["task"]]
-        hover_parts = [
-            f"<b>Task:</b> {wrap_text(str(row_data.get(task_col, '')))}",
-            f"<b>Agent:</b> {dot['agent']}",
-        ]
-        for meta in ["Observability", "Predictability", "Directability"]:
-            if meta in df.columns:
-                hover_parts.append(
-                    f"<b>{meta}:</b><br>{wrap_text(str(row_data.get(meta, '')))}"
-                )
+    # One scatter trace per agent column with per-point colors — much fewer traces
+    for col in agent_cols:
+        col_dots = [d for d in dots if d["agent"] == col]
+        if not col_dots:
+            continue
         fig.add_trace(go.Scatter(
-            x=[agent_pos[dot["agent"]]],
-            y=[dot["y"]],
+            x=[agent_pos[col]] * len(col_dots),
+            y=[d["y"] for d in col_dots],
             mode="markers",
-            marker=dict(size=20, color=dot["color"], symbol="circle"),
+            marker=dict(
+                size=20,
+                color=[d["color"] for d in col_dots],
+                symbol="circle",
+            ),
             showlegend=False,
             hoverinfo="text",
-            hovertext="<br><br>".join(hover_parts),
+            hovertext=[hover_lookup.get((d["task"], col), "") for d in col_dots],
         ))
 
     # Group dashed arrows by task for vertical offset
