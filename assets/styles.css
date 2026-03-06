@@ -22,6 +22,28 @@
     text-decoration: none !important;
 }
 
+/* Global button sizing — all buttons are rendered at a comfortable large size */
+button {
+    font-size: 20px !important;
+    padding: 10px 22px !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+}
+
+/* Hide the DataTable built-in "Toggle Columns" button */
+.show-hide {
+    display: none !important;
+}
+
+/* Table full-width breakout — escapes the 1400 px centered container */
+.table-breakout {
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    box-sizing: border-box;
+    padding: 0 20px;
+    overflow-x: hidden; /* DataTable's own overflowX:auto handles its scroll */
+}
+
 /* Active page styling */
 .nav-link.active {
     text-decoration: underline !important;

@@ -13,6 +13,7 @@ import os
 import base64
 import io
 import textwrap
+import time
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=["assets/styles.css"])
 server = app.server
@@ -114,10 +115,37 @@ def detect_team_config(df):
                     task_column = col
                     break
 
-    # 5. Identify metadata columns (everything not Row/Procedure/task/agent)
-    structural = {"Row", "Procedure"}
+    # 4b. Detect the procedure column (hierarchical grouping above tasks)
+    procedure_column = None
+    for candidate in ["Procedure", "procedure", "Phase", "Group", "Section"]:
+        if candidate in df.columns:
+            procedure_column = candidate
+            break
+
+    # 4c. Detect the category column (used for Automation Proportion)
+    category_column = None
+    color_set = set(color_columns)
+    structural_set = {"Row", procedure_column or "Procedure", task_column or "Task"}
+    for candidate in ["Category", "Type", "Classification", "Class", "Stage"]:
+        if candidate in df.columns:
+            category_column = candidate
+            break
+    if category_column is None:
+        for col in df.columns:
+            if col in structural_set or col in color_set:
+                continue
+            vals = df[col].dropna().astype(str)
+            # Heuristic: few unique values relative to row count → categorical
+            if 1 < vals.nunique() <= max(10, len(df) * 0.2):
+                category_column = col
+                break
+
+    # 5. Identify metadata columns (everything not Row/structural/task/agent/category)
+    structural = {"Row", procedure_column or "Procedure"}
     if task_column:
         structural.add(task_column)
+    if category_column:
+        structural.add(category_column)
     color_set = set(color_columns)
     metadata = [c for c in df.columns if c not in structural and c not in color_set]
 
@@ -128,6 +156,8 @@ def detect_team_config(df):
             for i, alt in enumerate(alternatives)
         ],
         "task_column": task_column or "Task",
+        "procedure_column": procedure_column or "Procedure",
+        "category_column": category_column,
         "color_columns": color_columns,
         "metadata_columns": metadata,
         "all_columns": list(df.columns),
@@ -135,7 +165,7 @@ def detect_team_config(df):
     return config
 
 
-def build_config_from_manual(column_str, task_col="Task"):
+def build_config_from_manual(column_str, task_col="Task", procedure_col="Procedure", category_col=None):
     """
     Build team config from a manual column specification string.
 
@@ -185,11 +215,11 @@ def build_config_from_manual(column_str, task_col="Task"):
         atype = "human" if name.lower() in ["human", "pilot", "operator", "crew"] else "autonomous"
         agents.append({"name": name, "type": atype})
 
-    all_columns = (
-        ["Row", "Procedure", task_col]
-        + cols
-        + ["Observability", "Predictability", "Directability"]
-    )
+    extra_cols = ["Observability", "Predictability", "Directability"]
+    struct_cols = ["Row", procedure_col, task_col]
+    if category_col and category_col not in struct_cols:
+        struct_cols.insert(3, category_col)  # insert after task_col
+    all_columns = struct_cols + cols + extra_cols
 
     config = {
         "agents": agents,
@@ -198,8 +228,10 @@ def build_config_from_manual(column_str, task_col="Task"):
             for i, alt in enumerate(alternatives)
         ],
         "task_column": task_col,
+        "procedure_column": procedure_col,
+        "category_column": category_col,
         "color_columns": cols,
-        "metadata_columns": ["Observability", "Predictability", "Directability"],
+        "metadata_columns": extra_cols,
         "all_columns": all_columns,
     }
     return config
@@ -255,7 +287,8 @@ def get_chosen_performer(row, config, strategy, category_overrides=None):
 
     # Category override check
     if category_overrides:
-        cat = str(row.get("Category", "") or "").strip()
+        cat_col = config.get("category_column") or "Category"
+        cat = str(row.get(cat_col, "") or "").strip()
         if cat in category_overrides:
             override_type = category_overrides[cat].lower()  # "human" or "autonomous"
             preferred = {
@@ -305,11 +338,43 @@ def get_chosen_performer(row, config, strategy, category_overrides=None):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def build_table_columns(config):
-    """Build DataTable column definitions from config, preserving CSV order."""
+    """Build DataTable column definitions with 3-level merged headers.
+
+    Row 0 (top)  : "Activity Decomposition" | "Capacity Assessment" | "" (metadata)
+    Row 1 (mid)  : ""                        | "Team Alternative N"  | ""
+    Row 2 (bottom): actual column name
+    """
     agent_set = set(get_agent_columns(config))
+
+    # Map every agent column → its alternative label
+    col_to_alt: dict[str, str] = {}
+    for i, alt in enumerate(config.get("alternatives", []), 1):
+        label = alt.get("name") or f"Team Alternative {i}"
+        for col in alt.get("performers", []) + alt.get("supporters", []):
+            col_to_alt[col] = label
+
+    all_columns = config.get("all_columns", [])
+    agent_indices = [i for i, c in enumerate(all_columns) if c in agent_set]
+    first_agent_idx = min(agent_indices) if agent_indices else len(all_columns)
+
+    # Columns that belong under the "Teaming Requirements" group header
+    TEAMING_COLS = {"Observability", "Predictability", "Directability"}
+
     columns = []
-    for col in config.get("all_columns", []):
-        d = {"name": col, "id": col}
+    for idx, col in enumerate(all_columns):
+        if col in agent_set:
+            alt_label = col_to_alt.get(col, "Team Alternative ?")
+            name = ["Capacity Assessment", alt_label, col]
+        elif idx < first_agent_idx:
+            name = ["Activity Decomposition", " ", col]
+        elif col in TEAMING_COLS:
+            name = ["Teaming Requirements", "  ", col]
+        else:
+            # Other metadata columns after the agent block (unique spacing
+            # prevents accidental merging with neighbouring groups)
+            name = ["  ", "   ", col]
+
+        d = {"name": name, "id": col}
         if col == "Row":
             d["editable"] = False
         elif col in agent_set:
@@ -363,19 +428,103 @@ def style_table(df, config):
     return styles
 
 
+def style_procedure_merge(df, config):
+    """Visual pseudo-merge for the Procedure column.
+
+    - Continuation rows (same Procedure as the row above): Procedure cell text
+      is made transparent so the cell appears empty, mimicking a merged cell.
+    - First row of each new Procedure group (after the very first): a top
+      separator line is drawn across every column to visually delimit clusters.
+    """
+    proc_col = config.get("procedure_column", "Procedure")
+    if proc_col not in df.columns or df.empty:
+        return []
+
+    all_cols = config.get("all_columns", [])
+    styles = []
+    df_reset = df.reset_index(drop=True)   # ensure 0-based positional index
+    prev_proc = None
+
+    for i in range(len(df_reset)):
+        proc = str(df_reset.at[i, proc_col]).strip()
+        if proc == prev_proc:
+            # Continuation row — hide repeated Procedure label
+            styles.append({
+                "if": {"row_index": i, "column_id": proc_col},
+                "color": "transparent",
+                "borderTop": "1px solid #e8e8e8",   # keep a very faint line
+            })
+        else:
+            # First row of a new group — draw a visible separator
+            if i > 0:
+                for col in all_cols:
+                    styles.append({
+                        "if": {"row_index": i, "column_id": col},
+                        "borderTop": "2px solid #555555",
+                    })
+        prev_proc = proc
+
+    return styles
+
+
+# Columns always shown when present; everything else is hidden by default.
+# Agent columns from the config are also always shown.
+DEFAULT_VISIBLE_COLUMNS = {
+    "Row", "Procedure", "Class", "Type", "Category", "Task",
+    "Object", "Value",
+    "Observability", "Predictability", "Directability",
+    "TARS Performer Role", "TARS Supporter Role",
+}
+
+
+def build_hidden_columns(config):
+    """Return a list of column IDs that should be hidden by default."""
+    agent_set = set(get_agent_columns(config))
+    visible = DEFAULT_VISIBLE_COLUMNS | agent_set
+    return [c for c in config.get("all_columns", []) if c not in visible]
+
+
 def build_data_table(df, config):
     """Create a new DataTable component from a DataFrame and config."""
+    hidden = build_hidden_columns(config)
     return dash_table.DataTable(
         id="responsibility-table",
         columns=build_table_columns(config),
         data=df.to_dict("records"),
         editable=True,
         row_deletable=True,
+        hidden_columns=hidden,
+        merge_duplicate_headers=True,
         dropdown=build_dropdowns(config),
-        style_data_conditional=style_table(df, config),
+        style_data_conditional=style_table(df, config) + style_procedure_merge(df, config),
         style_cell={"textAlign": "left", "padding": "5px", "whiteSpace": "normal"},
         style_cell_conditional=build_borders(config),
-        style_header={"fontWeight": "bold", "backgroundColor": "#f0f0f0"},
+        style_header={"fontWeight": "bold", "textAlign": "center"},
+        style_header_conditional=[
+            # Row 0 – top group labels
+            {
+                "if": {"header_index": 0},
+                "backgroundColor": "#444444",
+                "color": "white",
+                "fontSize": "13px",
+                "borderBottom": "2px solid white",
+            },
+            # Row 1 – team alternative labels
+            {
+                "if": {"header_index": 1},
+                "backgroundColor": "#777777",
+                "color": "white",
+                "fontSize": "12px",
+                "borderBottom": "2px solid white",
+            },
+            # Row 2 – column names (standard)
+            {
+                "if": {"header_index": 2},
+                "backgroundColor": "#f0f0f0",
+                "color": "#222",
+                "fontSize": "12px",
+            },
+        ],
         style_table={"overflowX": "auto", "border": "1px solid lightgrey"},
     )
 
@@ -413,7 +562,9 @@ def config_summary_html(config):
 
     return html.Div([
         html.P([html.B("Agents: "), agents_str]),
+        html.P([html.B("Procedure column: "), config.get("procedure_column", "Procedure")]),
         html.P([html.B("Task column: "), config["task_column"]]),
+        html.P([html.B("Category column: "), config.get("category_column") or "—  (none detected)"]),
         html.P([html.B("Columns: "), ", ".join(config.get("all_columns", []))]),
         html.Ul(alt_items),
     ])
@@ -423,19 +574,15 @@ def config_summary_html(config):
 # WORKFLOW GRAPH
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def build_workflow_figure(df, config, procedure=None, highlight_track=None,
-                         category_overrides=None, view_mode="full"):
+def build_workflow_figure_base(df, config, procedure=None, view_mode="full"):
     """
-    Build a parametric workflow graph for any team configuration.
+    Build the base workflow graph structure (without highlighting).
 
-    - Dots for each agent column with a valid color
-    - Dashed arrows for supporter→performer within an alternative
-    - Solid arrows for performer transitions between consecutive tasks
-    - Parametric highlighting with multiple strategies
-    - Optional performers-only view
+    Returns (fig, arrow_info) where arrow_info contains indices needed for
+    the fast highlighting pass.
     """
     if config is None or df.empty:
-        return go.Figure()
+        return go.Figure(), None
 
     agent_cols = get_agent_columns(config)
     performer_cols = set(get_performer_columns(config))
@@ -445,14 +592,10 @@ def build_workflow_figure(df, config, procedure=None, highlight_track=None,
     if view_mode == "performers":
         agent_cols = [c for c in agent_cols if c in performer_cols]
 
-    # Highlight tracking
-    highlight_set = set()
-    should_hl_support = highlight_track in (
-        "human_full_support", "agent_whenever_possible_full_support", "most_reliable",
-    )
-
-    if procedure is not None and "Procedure" in df.columns:
-        df = df[df["Procedure"] == procedure].copy()
+    proc_col = config.get("procedure_column", "Procedure") if config else "Procedure"
+    single_procedure = procedure is not None
+    if single_procedure and proc_col in df.columns:
+        df = df[df[proc_col] == procedure].copy()
 
     if df.empty:
         return go.Figure()
@@ -460,7 +603,30 @@ def build_workflow_figure(df, config, procedure=None, highlight_track=None,
     df = df.reset_index(drop=True)
     df["task_idx"] = df.index
     tasks = df[task_col].tolist() if task_col in df.columns else [f"Task {i}" for i in range(len(df))]
-    height = max(400, 100 + len(tasks) * 80)
+
+    # ── Y-coordinate mapping ──────────────────────────────────────────────
+    # When showing all procedures, insert a 1-unit gap between groups so
+    # procedure-divider lines can be drawn in the extra space.
+    # When filtered to a single procedure, y == task_idx (no gaps needed).
+    GAP = 1.2          # extra y-units reserved for the divider between groups
+    y_pos = []         # y_pos[i] = the plot y-coordinate for task i
+    proc_dividers = [] # list of (y_between, proc_label) for separator lines
+    procs = df[proc_col].tolist() if proc_col in df.columns else [""] * len(tasks)
+
+    if single_procedure:
+        y_pos = list(range(len(tasks)))
+    else:
+        y = 0.0
+        # Seed the first procedure label above the first task
+        if procs:
+            proc_dividers.append((-0.6, procs[0]))
+        for i, task_i in enumerate(tasks):
+            if i > 0 and procs[i] != procs[i - 1]:
+                # mid-point of the gap between groups
+                proc_dividers.append((y + GAP / 2 - 0.5, procs[i]))
+                y += GAP
+            y_pos.append(y)
+            y += 1.0
 
     agent_pos = {agent: i for i, agent in enumerate(agent_cols)}
 
@@ -469,15 +635,16 @@ def build_workflow_figure(df, config, procedure=None, highlight_track=None,
     solid_arrows = []
 
     # ── Per-task processing ───────────────────────────────────────────────
-    for _, row in df.iterrows():
+    for i, row in df.iterrows():
         task_idx = row["task_idx"]
+        yp = y_pos[task_idx]
 
         # Place dots
         for col in agent_cols:
             if col in df.columns:
                 val = str(row.get(col, "") or "").strip().lower()
                 if val in VALID_COLORS:
-                    dots.append({"task": task_idx, "agent": col, "color": val})
+                    dots.append({"task": task_idx, "y": yp, "agent": col, "color": val})
 
         # Dashed arrows: supporter → performer within each alternative
         for alt in config["alternatives"]:
@@ -496,13 +663,8 @@ def build_workflow_figure(df, config, procedure=None, highlight_track=None,
                                 "start_agent": sc,
                                 "end_agent": pc,
                                 "task": task_idx,
+                                "y": yp,
                             })
-
-        # Build highlight track entry for current task
-        if highlight_track and highlight_track != "none":
-            chosen = get_chosen_performer(row, config, highlight_track, category_overrides)
-            if chosen and chosen in agent_pos:
-                highlight_set.add((task_idx, chosen))
 
     # ── Solid arrows between consecutive tasks ────────────────────────────
     for i in range(1, len(df)):
@@ -517,12 +679,34 @@ def build_workflow_figure(df, config, procedure=None, highlight_track=None,
         for pa in prev_perfs:
             for ca in curr_perfs:
                 solid_arrows.append({
-                    "start_task": i - 1, "start_agent": pa,
-                    "end_task": i, "end_agent": ca,
+                    "start_task": i - 1, "start_y": y_pos[i - 1], "start_agent": pa,
+                    "end_task": i,   "end_y":   y_pos[i],     "end_agent": ca,
                 })
 
     # ── Render figure ─────────────────────────────────────────────────────
     fig = go.Figure()
+
+    # Procedure divider lines + labels (rendered first so dots sit on top)
+    x_min = -0.5
+    x_max = len(agent_cols) - 0.5
+    for div_y, proc_label in proc_dividers:
+        fig.add_shape(
+            type="line",
+            x0=x_min, y0=div_y, x1=x_max, y1=div_y,
+            xref="x", yref="y",
+            line=dict(color="#444444", width=1.5, dash="dot"),
+        )
+        fig.add_annotation(
+            x=(x_min + x_max) / 2, y=div_y,
+            xref="x", yref="y",
+            text=f"<b>{proc_label}</b>",
+            showarrow=False,
+            font=dict(size=11, color="#222222"),
+            bgcolor="rgba(240,240,240,0.85)",
+            bordercolor="#888888",
+            borderwidth=1,
+            borderpad=4,
+        )
 
     for dot in dots:
         row_data = df.iloc[dot["task"]]
@@ -537,7 +721,7 @@ def build_workflow_figure(df, config, procedure=None, highlight_track=None,
                 )
         fig.add_trace(go.Scatter(
             x=[agent_pos[dot["agent"]]],
-            y=[dot["task"]],
+            y=[dot["y"]],
             mode="markers",
             marker=dict(size=20, color=dot["color"], symbol="circle"),
             showlegend=False,
@@ -551,46 +735,44 @@ def build_workflow_figure(df, config, procedure=None, highlight_track=None,
         if arrow["start_agent"] in agent_pos and arrow["end_agent"] in agent_pos:
             dashed_by_task.setdefault(arrow["task"], []).append(arrow)
 
+    dashed_arrow_info = []
     for task, arrows in dashed_by_task.items():
         n = len(arrows)
         offsets = [0] * n if n == 1 else [
             -0.08 + 0.16 * i / (n - 1) for i in range(n)
         ]
         for arrow, offset in zip(arrows, offsets):
-            is_hl = should_hl_support and (task, arrow["end_agent"]) in highlight_set
             fig.add_shape(
                 type="line",
-                x0=agent_pos[arrow["start_agent"]], y0=task + offset,
-                x1=agent_pos[arrow["end_agent"]], y1=task + offset,
-                line=dict(
-                    color="crimson" if is_hl else "black",
-                    width=4 if is_hl else 2,
-                    dash="dot",
-                ),
+                x0=agent_pos[arrow["start_agent"]], y0=arrow["y"] + offset,
+                x1=agent_pos[arrow["end_agent"]], y1=arrow["y"] + offset,
+                line=dict(color="black", width=2, dash="dot"),
             )
+            dashed_arrow_info.append({"task": arrow["task"], "end_agent": arrow["end_agent"]})
 
+    solid_arrow_info = []
     for arrow in solid_arrows:
-        is_hl = bool(highlight_set) and (
-            (arrow["start_task"], arrow["start_agent"]) in highlight_set
-            and (arrow["end_task"], arrow["end_agent"]) in highlight_set
-        )
         fig.add_annotation(
-            x=agent_pos[arrow["end_agent"]], y=arrow["end_task"],
-            ax=agent_pos[arrow["start_agent"]], ay=arrow["start_task"],
+            x=agent_pos[arrow["end_agent"]], y=arrow["end_y"],
+            ax=agent_pos[arrow["start_agent"]], ay=arrow["start_y"],
             xref="x", yref="y", axref="x", ayref="y",
             showarrow=True, arrowhead=3, arrowsize=1,
-            arrowwidth=4 if is_hl else 2,
-            arrowcolor="crimson" if is_hl else "black",
+            arrowwidth=2,
+            arrowcolor="black",
             opacity=0.9,
         )
+        solid_arrow_info.append({
+            "start_task": arrow["start_task"], "start_agent": arrow["start_agent"],
+            "end_task": arrow["end_task"], "end_agent": arrow["end_agent"],
+        })
 
     # Layout
-    title_suffix = f" — {procedure}" if procedure else " (All Procedures)"
-    if procedure:
-        y_labels = [wrap_text(str(t)) for t in tasks]
-    else:
-        procs = df["Procedure"].tolist() if "Procedure" in df.columns else [""] * len(tasks)
-        y_labels = [wrap_text(f"{p} | {t}") for p, t in zip(procs, tasks)]
+    title_suffix = f" — {procedure}" if single_procedure else " (All Procedures)"
+    y_labels = [wrap_text(str(t)) for t in tasks]
+
+    # Estimated height: task rows + gap rows
+    total_y_span = y_pos[-1] if y_pos else len(tasks)
+    height = max(400, 100 + int(total_y_span * 80))
 
     fig.update_layout(
         title=f"Workflow Graph{title_suffix}",
@@ -599,19 +781,93 @@ def build_workflow_figure(df, config, procedure=None, highlight_track=None,
             ticktext=list(agent_pos.keys()),
             title="Agent",
             showgrid=True, gridcolor="lightgrey",
+            range=[x_min, x_max],
         ),
         yaxis=dict(
-            tickvals=list(range(len(tasks))),
+            tickvals=y_pos,
             ticktext=y_labels,
             title="Task",
-            autorange="reversed",
-            showgrid=True, gridcolor="lightgrey",
+            range=[(y_pos[-1] + 0.5) if y_pos else len(tasks), -1.0],
+            showgrid=False,
         ),
         height=height,
         margin=dict(l=250, r=50, t=50, b=50),
         plot_bgcolor="white",
         paper_bgcolor="white",
     )
+
+    arrow_info = {
+        "n_divider_shapes": len(proc_dividers),
+        "n_divider_annotations": len(proc_dividers),
+        "dashed_arrows": dashed_arrow_info,
+        "solid_arrows": solid_arrow_info,
+    }
+    return fig, arrow_info
+
+
+def apply_workflow_highlighting(fig_dict, arrow_info, df, config, procedure=None,
+                                highlight_track=None, category_overrides=None):
+    """Apply highlighting to a cached base workflow figure. Fast: only updates colors/widths."""
+    if fig_dict is None:
+        return go.Figure()
+
+    fig = go.Figure(fig_dict)
+
+    if arrow_info is None:
+        return fig
+
+    if (not highlight_track or highlight_track == "none") and not category_overrides:
+        return fig
+
+    if category_overrides is None:
+        category_overrides = {}
+
+    proc_col = config.get("procedure_column", "Procedure") if config else "Procedure"
+
+    if procedure is not None and proc_col in df.columns:
+        df = df[df[proc_col] == procedure].copy()
+
+    df = df.reset_index(drop=True)
+    df["task_idx"] = df.index
+
+    should_hl_support = highlight_track in (
+        "human_full_support", "agent_whenever_possible_full_support", "most_reliable",
+    )
+
+    # Build highlight set
+    highlight_set = set()
+    if highlight_track and highlight_track != "none":
+        for _, row in df.iterrows():
+            chosen = get_chosen_performer(row, config, highlight_track, category_overrides)
+            if chosen:
+                highlight_set.add((row["task_idx"], chosen))
+
+    # Apply highlighting to dashed arrow shapes
+    if fig.layout.shapes:
+        shapes = list(fig.layout.shapes)
+        offset = arrow_info.get("n_divider_shapes", 0)
+        for i, info in enumerate(arrow_info.get("dashed_arrows", [])):
+            idx = offset + i
+            if idx < len(shapes):
+                is_hl = should_hl_support and (info["task"], info["end_agent"]) in highlight_set
+                shapes[idx].line.color = "crimson" if is_hl else "black"
+                shapes[idx].line.width = 4 if is_hl else 2
+        fig.layout.shapes = shapes
+
+    # Apply highlighting to solid arrow annotations
+    if fig.layout.annotations:
+        annotations = list(fig.layout.annotations)
+        offset = arrow_info.get("n_divider_annotations", 0)
+        for i, info in enumerate(arrow_info.get("solid_arrows", [])):
+            idx = offset + i
+            if idx < len(annotations):
+                is_hl = bool(highlight_set) and \
+                        (info["start_task"], info["start_agent"]) in highlight_set and \
+                        (info["end_task"], info["end_agent"]) in highlight_set
+                annotations[idx].arrowcolor = "crimson" if is_hl else "black"
+                annotations[idx].arrowwidth = 4 if is_hl else 2
+        fig.layout.annotations = annotations
+
     return fig
 
 
@@ -678,16 +934,17 @@ def build_capacity_bar_chart(df, config):
 
 
 def build_allocation_bar_chart(df, config):
-    """Horizontal bar showing allocation type distribution."""
+    """Pie chart showing task type (allocation) distribution."""
     if config is None or df.empty:
         return go.Figure()
 
     performer_cols = get_performer_columns(config)
     supporter_cols = get_supporter_columns(config)
 
-    single = 0
-    multiple = 0
-    interdependent = 0
+    single_independent = 0
+    multiple_independent = 0
+    single_interdependent = 0
+    multiple_interdependent = 0
 
     for _, row in df.iterrows():
         perfs = [
@@ -703,48 +960,47 @@ def build_allocation_bar_chart(df, config):
             and str(row.get(c, "") or "").strip().lower() != "red"
         ]
         if len(sups) > 0:
-            interdependent += 1
+            if len(perfs) == 1:
+                single_interdependent += 1
+            else:
+                multiple_interdependent += 1
         elif len(perfs) == 1:
-            single += 1
+            single_independent += 1
         elif len(perfs) > 1:
-            multiple += 1
+            multiple_independent += 1
 
-    total = max(len(df), 1)
-    fig = go.Figure()
+    labels = [
+        "Single Allocation Independent",
+        "Multiple Allocation Independent",
+        "Single Allocation Interdependent",
+        "Multiple Allocation Interdependent",
+    ]
+    values = [single_independent, multiple_independent, single_interdependent, multiple_interdependent]
+    colors = ["lightcoral", "lightskyblue", "lightgreen", "mediumseagreen"]
 
-    for label, count, color in [
-        ("Single Allocation Independent", single, "lightcoral"),
-        ("Multiple Allocation Independent", multiple, "lightskyblue"),
-        ("Interdependent (Support Available)", interdependent, "lightgreen"),
-    ]:
-        pct = f"{count / total * 100:.1f}%" if total > 0 else "0%"
-        fig.add_trace(go.Bar(
-            name=label,
-            y=["Task Allocation Types"],
-            x=[count],
-            orientation="h",
-            marker=dict(color=color),
-            text=[f"{label}: {count} ({pct})" if count > 0 else ""],
-            textposition="inside",
-            textfont=dict(color="black", size=12),
-            hovertemplate=f"{label}<br>Count: %{{x}}<br>Percentage: {pct}<extra></extra>",
-        ))
-
+    fig = go.Figure(go.Pie(
+        labels=labels,
+        values=values,
+        marker=dict(colors=colors),
+        textinfo="label+percent",
+        hovertemplate="%{label}<br>Count: %{value}<br>%{percent}<extra></extra>",
+        hole=0.3,
+    ))
     fig.update_layout(
         title="Task Type Distribution",
-        xaxis_title="Number of Tasks",
-        barmode="stack", height=200,
-        plot_bgcolor="white", paper_bgcolor="white",
-        showlegend=False,
-        margin=dict(l=50, r=50, t=50, b=50),
+        height=480,
+        paper_bgcolor="white",
+        margin=dict(l=20, r=20, t=60, b=20),
     )
     return fig
 
 
 def build_autonomy_bar_chart(df, config):
-    """Horizontal bar showing agent autonomy (task continuity)."""
+    """Pie charts showing agent autonomy (task continuity) — one pie per performer."""
     if config is None or df.empty:
         return go.Figure()
+
+    from plotly.subplots import make_subplots
 
     performer_cols = get_performer_columns(config)
     agent_autonomy = {c: {"autonomous": 0, "non_autonomous": 0} for c in performer_cols}
@@ -765,35 +1021,36 @@ def build_autonomy_bar_chart(df, config):
                         agent_autonomy[col]["autonomous"] += 1
         prev_performers = current_performers
 
-    fig = go.Figure()
-    for col in performer_cols:
+    active_cols = [c for c in performer_cols if (agent_autonomy[c]["autonomous"] + agent_autonomy[c]["non_autonomous"]) > 0]
+    if not active_cols:
+        return go.Figure()
+
+    n = len(active_cols)
+    fig = make_subplots(
+        rows=1, cols=n,
+        specs=[[{"type": "pie"}] * n],
+        subplot_titles=[c.rstrip("*") for c in active_cols],
+    )
+
+    for i, col in enumerate(active_cols, 1):
         auto = agent_autonomy[col]["autonomous"]
         non_auto = agent_autonomy[col]["non_autonomous"]
-        total = auto + non_auto
-        if total == 0:
-            continue
-        fig.add_trace(go.Bar(
-            name=f"{col} Non-Auto", y=[col], x=[non_auto], orientation="h",
-            marker=dict(color="lightcoral"),
-            text=[f"Non-Auto: {non_auto} ({non_auto/total*100:.1f}%)" if non_auto > 0 else ""],
-            textposition="inside", textfont=dict(color="black", size=11),
-            showlegend=False,
-        ))
-        fig.add_trace(go.Bar(
-            name=f"{col} Auto", y=[col], x=[auto], orientation="h",
-            marker=dict(color="lightgreen"),
-            text=[f"Auto: {auto} ({auto/total*100:.1f}%)" if auto > 0 else ""],
-            textposition="inside", textfont=dict(color="black", size=11),
-            showlegend=False,
-        ))
+        fig.add_trace(go.Pie(
+            labels=["Autonomous", "Non-Autonomous"],
+            values=[auto, non_auto],
+            marker=dict(colors=["lightgreen", "lightcoral"]),
+            textinfo="label+percent",
+            hovertemplate="%{label}<br>Count: %{value}<br>%{percent}<extra></extra>",
+            hole=0.3,
+            showlegend=(i == 1),
+        ), row=1, col=i)
 
     fig.update_layout(
         title="Agent Autonomy: Task Continuity",
-        xaxis_title="Number of Tasks", yaxis_title="Agent",
-        barmode="stack", height=200 + 50 * len(performer_cols),
-        plot_bgcolor="white", paper_bgcolor="white",
-        showlegend=False,
-        margin=dict(l=100, r=50, t=50, b=50),
+        height=400,
+        paper_bgcolor="white",
+        margin=dict(l=20, r=20, t=80, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
     )
     return fig
 
@@ -906,14 +1163,15 @@ def compute_automation_proportion_data(df, config, highlight_track, category_ove
 
     Returns (P, category_scores_dict) or (None, {}) if not applicable.
     """
-    if config is None or df.empty or "Category" not in df.columns:
+    cat_col = config.get("category_column") or "Category"
+    if config is None or df.empty or cat_col not in df.columns:
         return None, {}
 
     if not highlight_track or highlight_track == "none":
         return None, {}
 
     agent_types = {a["name"]: a["type"] for a in config["agents"]}
-    categories = sorted(df["Category"].dropna().unique())
+    categories = sorted(df[cat_col].dropna().unique())
 
     if not categories:
         return None, {}
@@ -925,7 +1183,7 @@ def compute_automation_proportion_data(df, config, highlight_track, category_ove
     )
 
     for cat in categories:
-        cat_df = df[df["Category"] == cat]
+        cat_df = df[df[cat_col] == cat]
         Tk = len(cat_df)
         if Tk == 0:
             continue
@@ -975,6 +1233,8 @@ app.layout = html.Div([
     # ── Stores ──
     dcc.Store(id="team-config-store", data=None),
     dcc.Store(id="category-overrides-store", data={}),
+    dcc.Store(id="base-figure-store", data=None),
+    dcc.Store(id="arrow-indices-store", data=None),
 
     # ── Header ──
     html.Div(
@@ -982,10 +1242,6 @@ app.layout = html.Div([
         style={"textAlign": "right", "color": "#888", "fontSize": "14px", "marginBottom": "10px"},
     ),
     html.H1("Interdependence Analysis Dashboard", style={"textAlign": "center"}),
-    html.P(
-        "Generic tool for any Human-Autonomy Team",
-        style={"textAlign": "center", "color": "#666", "marginBottom": "30px"},
-    ),
 
     # ══════════════════════════════════════════════════════════════════════
     # SETUP SECTION
@@ -1003,6 +1259,16 @@ app.layout = html.Div([
                     "Columns ending with * are treated as performer roles.",
                     style={"color": "#666", "fontSize": "14px"},
                 ),
+                html.P([
+                    html.B("Expected column structure: "),
+                    "Row | Procedure | Task | [optional: Category] | Agent columns... | Metadata columns",
+                ], style={"color": "#666", "fontSize": "13px", "fontFamily": "monospace"}),
+                html.P([
+                    "The Procedure column groups Tasks hierarchically (Procedure → Task). "
+                    "The optional Category column (e.g. Sense/Interpret/Decide/Act from a SIDA decomposition) "
+                    "is used for Automation Proportion computation. Any column with few unique string values "
+                    "not matching colors will be auto-detected as the Category column.",
+                ], style={"color": "#666", "fontSize": "13px"}),
                 dcc.Upload(
                     id="setup-upload",
                     children=html.Div([
@@ -1023,6 +1289,7 @@ app.layout = html.Div([
             html.Div([
                 html.H4("Option 2: Define Team Manually"),
                 html.P(
+                    "The first task of the IA requires defining team alternatives, first list all of the agents in the team, then check for alternatives in agent's roles (e.g. performer vs supporter)."
                     "Enter the agent role columns in order. Use * for performer columns. "
                     "Group them as: Alt1-performers, Alt1-supporters, Alt2-performers, Alt2-supporters, ...",
                     style={"color": "#666", "fontSize": "14px"},
@@ -1035,14 +1302,55 @@ app.layout = html.Div([
                         style={"width": "100%", "marginBottom": "10px", "padding": "8px"},
                     ),
                 ]),
+
+                # ── Procedure column ──
                 html.Div([
-                    html.Label("Task column name:", style={"fontWeight": "bold", "marginRight": "10px"}),
+                    html.Label("Higher-level activity column name:", style={"fontWeight": "bold", "marginRight": "10px"}),
+                    dcc.Input(
+                        id="manual-procedure-col-input",
+                        value="Procedure",
+                        style={"width": "200px", "padding": "8px"},
+                    ),
+                ], style={"display": "flex", "alignItems": "center", "marginBottom": "6px"}),
+                html.P(
+                    "Define the column name that groups several Tasks and represents one level of hierarchical decomposition of the joint activity — "
+                    "the analysis uses a two-level hierarchy: (e.g. Procedure → Task.) This column typically "
+                    "corresponds to high-level mission phases or activity clusters.",
+                    style={"color": "#666", "fontSize": "13px", "marginTop": "2px", "marginBottom": "14px"},
+                ),
+
+                # ── Task column ──
+                html.Div([
+                    html.Label("Lower-level activity column name:", style={"fontWeight": "bold", "marginRight": "10px"}),
                     dcc.Input(
                         id="manual-task-col-input",
                         value="Task",
                         style={"width": "200px", "padding": "8px"},
                     ),
-                ], style={"marginBottom": "15px"}),
+                ], style={"display": "flex", "alignItems": "center", "marginBottom": "6px"}),
+                html.P([
+                    "Represents the terminal nodes of the activity decomposition. We recommend decomposing into required capacity in terms of "
+                    "information-processing stages: ",
+                    html.B("Sense → Interpret → Decide → Act"),
+                ], style={"color": "#666", "fontSize": "13px", "marginTop": "2px", "marginBottom": "14px"}),
+
+                # ── Category column ──
+                html.Div([
+                    html.Label("Category column name (optional):", style={"fontWeight": "bold", "marginRight": "10px"}),
+                    dcc.Input(
+                        id="manual-category-col-input",
+                        value="Category",
+                        placeholder="e.g. Category, Type, Stage",
+                        style={"width": "220px", "padding": "8px"},
+                    ),
+                ], style={"display": "flex", "alignItems": "center", "marginBottom": "6px"}),
+                html.P(
+                    "The Category column assigns each task to a named group. It is used as the grouping variable "
+                    "for Automation Proportion computation: one proportion pₖ is computed per category, then "
+                    "averaged to produce the overall index P. Leave blank if not applicable.",
+                    style={"color": "#666", "fontSize": "13px", "marginTop": "2px", "marginBottom": "14px"},
+                ),
+
                 # Preset buttons
                 html.Div([
                     html.Label("Presets: ", style={"fontWeight": "bold", "marginRight": "10px"}),
@@ -1050,10 +1358,9 @@ app.layout = html.Div([
                                 style={"marginRight": "10px"}),
                     html.Button("Human + UGV + UAV", id="preset-3agent", n_clicks=0,
                                 style={"marginRight": "10px"}),
-                    html.Button("Human + TARS", id="preset-tars", n_clicks=0),
                 ], style={"marginBottom": "15px"}),
                 html.Button(
-                    "🚀 Create Team", id="create-team-button", n_clicks=0,
+                    "Create Team", id="create-team-button", n_clicks=0,
                     style={
                         "marginTop": "10px", "padding": "10px 30px", "fontSize": "16px",
                         "backgroundColor": "#4CAF50", "color": "white", "border": "none",
@@ -1070,7 +1377,7 @@ app.layout = html.Div([
     html.Div(id="config-summary", style=HIDE, children=[
         html.Div([
             html.H4("Current Team Configuration", style={"display": "inline-block"}),
-            html.Button("🔄 Change Team", id="reset-config-button", n_clicks=0,
+            html.Button("Change Team", id="reset-config-button", n_clicks=0,
                         style={"marginLeft": "20px", "cursor": "pointer"}),
         ], style={"display": "flex", "alignItems": "center"}),
         html.Div(id="config-details"),
@@ -1082,31 +1389,37 @@ app.layout = html.Div([
     # ══════════════════════════════════════════════════════════════════════
     html.Div(id="analysis-section", style=HIDE, children=[
         html.H2("Interdependence Analysis Table", style={"textAlign": "center"}),
-        html.Div(id="table-wrapper"),
 
-        # Action buttons
+        # ── Table + its action buttons share the full-width breakout zone ──
         html.Div([
+            html.Div(id="table-wrapper"),
+
+            # Action buttons
             html.Div([
                 html.Div([
-                    dcc.Upload(
-                        id="upload-data",
-                        children=html.Button("📂 Load Table", id="load-button", n_clicks=0),
-                        multiple=False,
-                        style={"display": "inline-block", "marginRight": "10px"},
-                    ),
-                    html.Button("➕ Add Row", id="add-row-button", n_clicks=0),
-                    html.Button("⬇️ Copy Cell Down", id="copy-down-button", n_clicks=0),
-                ], style={"display": "flex", "gap": "10px"}),
-                html.Div([
-                    html.Button("💾 Save Table", id="save-button", n_clicks=0),
-                    dcc.Download(id="download-csv"),
-                ], style={"marginLeft": "auto"}),
-            ], style={"display": "flex", "width": "100%"}),
-            html.Div(id="save-confirmation", style={"marginTop": "10px", "fontStyle": "italic"}),
-        ]),
+                    html.Div([
+                        dcc.Upload(
+                            id="upload-data",
+                            children=html.Button("📂 Load Table", id="load-button", n_clicks=0),
+                            multiple=False,
+                            style={"display": "inline-block", "marginRight": "10px"},
+                        ),
+                        html.Button("➕ Add Row", id="add-row-button", n_clicks=0),
+                        html.Button("⬇️ Copy Cell Down", id="copy-down-button", n_clicks=0),
+                    ], style={"display": "flex", "gap": "10px"}),
+                    html.Div([
+                        html.Button("💾 Save Table", id="save-button", n_clicks=0),
+                        dcc.Download(id="download-csv"),
+                    ], style={"marginLeft": "auto"}),
+                ], style={"display": "flex", "width": "100%"}),
+                html.Div(id="save-confirmation", style={"marginTop": "10px", "fontStyle": "italic"}),
+            ]),
+        ], className="table-breakout"),
 
         # ── Workflow Graph ──
-        html.H2("Interdependence Workflow Graph", style={"textAlign": "center", "marginTop": "40px"}),
+        html.H2("Workflow Graph", style={"textAlign": "center", "marginTop": "39px"}),
+
+        # Procedure dropdown + View selector — same row, left-aligned
         html.Div([
             dcc.Dropdown(
                 id="procedure-dropdown",
@@ -1114,34 +1427,47 @@ app.layout = html.Div([
                 value=None,
                 placeholder="Select a procedure to filter the graph...",
                 clearable=True,
-                style={"width": "50%", "margin": "0 auto"},
-            )
-        ]),
-        # ── View selector ──
-        dcc.RadioItems(
-            id="view-selector",
-            options=[
-                {"label": "Full View (All Agents)", "value": "full"},
-                {"label": "Performers Only", "value": "performers"},
-            ],
-            value="full",
-            labelStyle={"display": "inline-block", "margin-right": "20px"},
-            style={"textAlign": "center", "marginTop": "10px"},
-        ),
+                style={"width": "320px", "marginRight": "30px"},
+            ),
+            dcc.RadioItems(
+                id="view-selector",
+                options=[
+                    {"label": "Full View (All Agents)", "value": "full"},
+                    {"label": "Performers Only", "value": "performers"},
+                ],
+                value="full",
+                labelStyle={"display": "inline-block", "marginRight": "20px"},
+                style={"display": "flex", "alignItems": "center"},
+            ),
+        ], style={"display": "flex", "alignItems": "center", "marginTop": "12px"}),
+
+        # Allocation pattern selector — left-aligned, labels updated dynamically
         dcc.RadioItems(
             id="highlight-selector",
             options=[
                 {"label": "No highlight", "value": "none"},
-                {"label": "Human-performer-only no support", "value": "human_baseline"},
-                {"label": "Human-performer-only full support", "value": "human_full_support"},
-                {"label": "Agent-performer-whenever-possible no support", "value": "agent_whenever_possible"},
-                {"label": "Agent-performer-whenever-possible full support", "value": "agent_whenever_possible_full_support"},
-                {"label": "Most reliable path", "value": "most_reliable"},
+                {"label": "Alt 1 performer — independent", "value": "human_baseline"},
+                {"label": "Alt 1 performer — interdependent", "value": "human_full_support"},
+                {"label": "Alt 2 performer — independent", "value": "agent_whenever_possible"},
+                {"label": "Alt 2 performer — interdependent", "value": "agent_whenever_possible_full_support"},
+                {"label": "Path of highest reliability", "value": "most_reliable"},
             ],
             value="none",
-            labelStyle={"display": "inline-block", "margin-right": "20px"},
-            style={"textAlign": "center", "marginTop": "10px"},
+            labelStyle={"display": "inline-block", "marginRight": "20px"},
+            style={"marginTop": "10px"},
         ),
+
+        # ── Category Overrides (full-width, shown only when Category column exists) ──
+        html.Div(id="category-overrides-section", style={"display": "none"},
+                 className="table-breakout", children=[
+            html.H3("Category Overrides", style={"textAlign": "center", "marginTop": "30px"}),
+            html.P(
+                "Click a bar to force a specific agent type for that category. "
+                "Click again to reset to default strategy.",
+                style={"textAlign": "center", "color": "#666", "fontSize": "14px"},
+            ),
+            html.Div(id="category-overrides-container"),
+        ]),
 
         # ── Automation Proportion Summary ──
         html.Div(id="automation-proportion-box", children=[
@@ -1164,24 +1490,20 @@ app.layout = html.Div([
         html.Div(id="alt-labels"),
 
         # ── Bar Charts ──
-        html.Div([
+        html.Details([
+            html.Summary("Capacity Assessment Graphs", style={
+                "fontSize": "20px", "fontWeight": "bold", "cursor": "pointer",
+                "padding": "10px 0", "userSelect": "none",
+            }),
             dcc.Graph(id="capacity-bar-chart"),
             dcc.Graph(id="most-reliable-bar-chart"),
             dcc.Graph(id="human-baseline-bar-chart"),
+        ], style={"marginTop": "20px", "borderTop": "2px solid #ccc", "paddingTop": "6px"}),
+        html.Div([
             dcc.Graph(id="allocation-type-bar-chart"),
             dcc.Graph(id="agent-autonomy-bar-chart"),
         ]),
 
-        # ── Category Overrides (shown only when Category column exists) ──
-        html.Div(id="category-overrides-section", style={"display": "none"}, children=[
-            html.H3("Category Overrides", style={"textAlign": "center", "marginTop": "30px"}),
-            html.P(
-                "Click a bar to force a specific agent type for that category. "
-                "Click again to reset to default strategy.",
-                style={"textAlign": "center", "color": "#666", "fontSize": "14px"},
-            ),
-            html.Div(id="category-overrides-container"),
-        ]),
     ]),
 
     # Footer
@@ -1206,21 +1528,19 @@ app.layout = html.Div([
 @app.callback(
     Output("manual-columns-input", "value"),
     Output("manual-task-col-input", "value"),
+    Output("manual-procedure-col-input", "value"),
     Input("preset-2agent", "n_clicks"),
     Input("preset-3agent", "n_clicks"),
-    Input("preset-tars", "n_clicks"),
     prevent_initial_call=True,
 )
-def apply_preset(n2, n3, nt):
+def apply_preset(n2, n3):
     ctx = callback_context
     btn = ctx.triggered[0]["prop_id"].split(".")[0]
     if btn == "preset-2agent":
-        return "Human*, Robot, Robot*, Human", "Task"
+        return "Human*, Robot, Robot*, Human", "Task", "Procedure"
     elif btn == "preset-3agent":
-        return "Human*, UGV, UAV, UGV*, UAV*, Human", "Task"
-    elif btn == "preset-tars":
-        return "Human*, TARS, TARS*, Human", "Task Object"
-    return dash.no_update, dash.no_update
+        return "Human*, UGV, UAV, UGV*, UAV*, Human", "Task", "Procedure"
+    return dash.no_update, dash.no_update, dash.no_update
 
 
 # ── Setup / Config callback ──────────────────────────────────────────────────
@@ -1239,10 +1559,13 @@ def apply_preset(n2, n3, nt):
     State("setup-upload", "filename"),
     State("manual-columns-input", "value"),
     State("manual-task-col-input", "value"),
+    State("manual-procedure-col-input", "value"),
+    State("manual-category-col-input", "value"),
     prevent_initial_call=True,
 )
 def handle_setup(upload_contents, create_clicks, reset_clicks,
-                 upload_filename, manual_columns, manual_task_col):
+                 upload_filename, manual_columns, manual_task_col,
+                 manual_procedure_col, manual_category_col):
     ctx = callback_context
     triggered = ctx.triggered[0]["prop_id"].split(".")[0]
     no = dash.no_update
@@ -1268,16 +1591,22 @@ def handle_setup(upload_contents, create_clicks, reset_clicks,
             config["all_columns"] = ["Row"] + [c for c in config["all_columns"] if c != "Row"]
 
         # Procedure dropdown options
+        proc_col = config.get("procedure_column", "Procedure")
         proc_options = []
-        if "Procedure" in df.columns:
-            proc_options = [{"label": p, "value": p} for p in df["Procedure"].dropna().unique()]
+        if proc_col in df.columns:
+            proc_options = [{"label": p, "value": p} for p in df[proc_col].dropna().unique()]
 
         table = build_data_table(df, config)
         summary = config_summary_html(config)
         return config, table, SHOW, HIDE, SHOW, summary, proc_options, f"✅ Loaded {upload_filename}"
 
     if triggered == "create-team-button":
-        config = build_config_from_manual(manual_columns or "", manual_task_col or "Task")
+        config = build_config_from_manual(
+            manual_columns or "",
+            task_col=manual_task_col or "Task",
+            procedure_col=manual_procedure_col or "Procedure",
+            category_col=manual_category_col.strip() or None if manual_category_col else None,
+        )
         if config is None:
             return no, no, no, no, no, no, no, no
         df = create_empty_df(config)
@@ -1342,9 +1671,10 @@ def handle_table(data, save_clicks, upload_contents, add_clicks, copy_clicks,
             df.insert(0, "Row", range(1, len(df) + 1))
             new_config["all_columns"] = ["Row"] + [c for c in new_config["all_columns"] if c != "Row"]
 
+        proc_col = new_config.get("procedure_column", "Procedure")
         proc_options = []
-        if "Procedure" in df.columns:
-            proc_options = [{"label": p, "value": p} for p in df["Procedure"].dropna().unique()]
+        if proc_col in df.columns:
+            proc_options = [{"label": p, "value": p} for p in df[proc_col].dropna().unique()]
 
         table = build_data_table(df, new_config)
         summary = config_summary_html(new_config)
@@ -1374,38 +1704,38 @@ def handle_table(data, save_clicks, upload_contents, add_clicks, copy_clicks,
     if triggered == "responsibility-table" and data and config:
         df = pd.DataFrame(data)
         df = ensure_row_column(df)
+        proc_col = config.get("procedure_column", "Procedure")
         proc_options = []
-        if "Procedure" in df.columns:
-            proc_options = [{"label": p, "value": p} for p in df["Procedure"].dropna().unique()]
+        if proc_col in df.columns:
+            proc_options = [{"label": p, "value": p} for p in df[proc_col].dropna().unique()]
         table = build_data_table(df, config)
         return table, "", None, proc_options, no, no, no, no, no
 
     return no, "", None, no, no, no, no, no, no
 
 
-# ── Graph callback ────────────────────────────────────────────────────────────
+# ── Graph callbacks (two-stage: base figure + highlighting) ───────────────────
 @app.callback(
-    Output("interdependence-graph", "figure"),
+    Output("base-figure-store", "data"),
+    Output("arrow-indices-store", "data"),
     Output("alt-labels", "children"),
     Input("procedure-dropdown", "value"),
-    Input("highlight-selector", "value"),
     Input("view-selector", "value"),
     Input("responsibility-table", "data"),
-    Input("category-overrides-store", "data"),
     State("team-config-store", "data"),
 )
-def update_graph(procedure, highlight_track, view_mode, data, category_overrides, config):
+def build_base_figure(procedure, view_mode, data, config):
+    """Build the base figure structure (without highlighting).
+    Only runs when procedure, view mode, or data changes."""
     if not data or not config:
-        return go.Figure(), None
+        return None, None, None
 
     df = pd.DataFrame(data)
     if df.empty:
-        return go.Figure(), None
+        return None, None, None
 
-    ht = None if highlight_track == "none" else highlight_track
-    fig = build_workflow_figure(
-        df, config, procedure=procedure, highlight_track=ht,
-        category_overrides=category_overrides or {}, view_mode=view_mode or "full",
+    fig, arrow_info = build_workflow_figure_base(
+        df, config, procedure=procedure, view_mode=view_mode or "full",
     )
 
     # Team alternative labels
@@ -1424,7 +1754,33 @@ def update_graph(procedure, highlight_track, view_mode, data, category_overrides
         "marginLeft": "150px", "marginRight": "50px",
     }) if labels else None
 
-    return fig, alt_label_div
+    return fig.to_dict(), arrow_info, alt_label_div
+
+
+@app.callback(
+    Output("interdependence-graph", "figure"),
+    Input("base-figure-store", "data"),
+    Input("arrow-indices-store", "data"),
+    Input("highlight-selector", "value"),
+    Input("category-overrides-store", "data"),
+    Input("procedure-dropdown", "value"),
+    State("responsibility-table", "data"),
+    State("team-config-store", "data"),
+)
+def apply_highlighting_callback(base_fig_dict, arrow_info, highlight_track,
+                                 category_overrides, procedure, data, config):
+    """Apply highlighting to the cached base figure. Fast: only updates colors/widths."""
+    if not base_fig_dict or not data or not config:
+        return go.Figure()
+
+    df = pd.DataFrame(data)
+    ht = None if highlight_track == "none" else highlight_track
+
+    return apply_workflow_highlighting(
+        base_fig_dict, arrow_info, df, config,
+        procedure=procedure, highlight_track=ht,
+        category_overrides=category_overrides or {},
+    )
 
 
 # ── Bar chart callback ────────────────────────────────────────────────────────
@@ -1443,8 +1799,9 @@ def update_bar_charts(procedure, data, config):
         return go.Figure(), go.Figure(), go.Figure(), go.Figure(), go.Figure()
 
     df = pd.DataFrame(data)
-    if procedure and "Procedure" in df.columns:
-        df = df[df["Procedure"] == procedure]
+    proc_col = config.get("procedure_column", "Procedure")
+    if procedure and proc_col in df.columns:
+        df = df[df[proc_col] == procedure]
 
     return (
         build_capacity_bar_chart(df, config),
@@ -1473,10 +1830,12 @@ def compute_automation_proportion(highlight_track, category_overrides, procedure
         return {"display": "none"}, "--", {}, "", None
 
     df = pd.DataFrame(data)
-    if procedure and "Procedure" in df.columns:
-        df = df[df["Procedure"] == procedure]
+    proc_col = config.get("procedure_column", "Procedure")
+    if procedure and proc_col in df.columns:
+        df = df[df[proc_col] == procedure]
 
-    if "Category" not in df.columns or not highlight_track or highlight_track == "none":
+    cat_col = config.get("category_column") or "Category"
+    if cat_col not in df.columns or not highlight_track or highlight_track == "none":
         return {"display": "none"}, "--", {}, "", None
 
     P, cat_scores = compute_automation_proportion_data(
@@ -1501,6 +1860,14 @@ def compute_automation_proportion(highlight_track, category_overrides, procedure
     detail_parts = [f"{cat}: {score:.2f}" for cat, score in sorted(cat_scores.items())]
     detail_text = " | ".join(detail_parts) if detail_parts else ""
 
+    # Extract performer names for formula explanation
+    alts = config.get("alternatives", [])
+    def _perf_name(alt):
+        perfs = alt.get("performers", [])
+        return perfs[0].rstrip("*") if perfs else "Agent"
+    alt1_name = _perf_name(alts[0]) if len(alts) > 0 else "Alt 1 performer"
+    alt2_name = _perf_name(alts[1]) if len(alts) > 1 else "Alt 2 performer"
+
     # LaTeX formula display
     formula = html.Div([
         html.P([
@@ -1510,11 +1877,39 @@ def compute_automation_proportion(highlight_track, category_overrides, procedure
         ], style={"fontSize": "13px", "color": "#666", "marginTop": "5px"}),
         html.P([
             html.B("Where: "),
-            "w(t) = 1.0 (autonomous), 0.5 (human with autonomous support), 0.0 (human alone)",
+            f"w(t) = 0.0 ({alt1_name} independent), "
+            f"0.5 ({alt1_name} interdependent — supported by autonomous), "
+            f"0.75 ({alt1_name} as supporter), "
+            f"1.0 ({alt2_name} independent)",
         ], style={"fontSize": "12px", "color": "#888"}),
     ])
 
     return box_style, f"{P:.3f}", val_style, detail_text, formula
+
+
+# ── Dynamic highlight-selector labels ─────────────────────────────────────────
+@app.callback(
+    Output("highlight-selector", "options"),
+    Input("team-config-store", "data"),
+)
+def update_highlight_options(config):
+    def _perf_name(alt):
+        perfs = alt.get("performers", [])
+        return perfs[0].rstrip("*") if perfs else "Agent"
+    if not config or not config.get("alternatives"):
+        a1, a2 = "Alt 1 performer", "Alt 2 performer"
+    else:
+        alts = config["alternatives"]
+        a1 = _perf_name(alts[0]) if len(alts) > 0 else "Alt 1 performer"
+        a2 = _perf_name(alts[1]) if len(alts) > 1 else "Alt 2 performer"
+    return [
+        {"label": "No highlight", "value": "none"},
+        {"label": f"{a1} — independent", "value": "human_baseline"},
+        {"label": f"{a1} — interdependent", "value": "human_full_support"},
+        {"label": f"{a2} — independent", "value": "agent_whenever_possible"},
+        {"label": f"{a2} — interdependent", "value": "agent_whenever_possible_full_support"},
+        {"label": "Path of highest reliability", "value": "most_reliable"},
+    ]
 
 
 # ── Category Overrides callbacks ──────────────────────────────────────────────
@@ -1530,12 +1925,13 @@ def generate_category_overrides(data, config):
         return {"display": "none"}, None
 
     df = pd.DataFrame(data)
-    if "Category" not in df.columns:
+    cat_col = config.get("category_column") or "Category"
+    if cat_col not in df.columns:
         return {"display": "none"}, None
 
     agent_types = {a["name"]: a["type"] for a in config["agents"]}
     performer_cols = get_performer_columns(config)
-    categories = sorted(df["Category"].dropna().unique())
+    categories = sorted(df[cat_col].dropna().unique())
 
     if not categories:
         return {"display": "none"}, None
@@ -1558,7 +1954,7 @@ def generate_category_overrides(data, config):
 
     children = []
     for cat in categories:
-        cat_df = df[df["Category"] == cat]
+        cat_df = df[df[cat_col] == cat]
 
         human_assignable = sum(
             1 for _, row in cat_df.iterrows()
@@ -1574,21 +1970,26 @@ def generate_category_overrides(data, config):
         )
 
         fig = go.Figure()
+        max_count = max(auto_assignable, human_assignable, 1)
+        _ts = time.time()
         fig.add_trace(go.Bar(
             y=[auto_label], x=[auto_assignable], orientation="h",
             marker_color="grey", name=auto_label,
             text=[f"{auto_assignable}"], textposition="outside",
+            cliponaxis=False, customdata=[_ts],
         ))
         fig.add_trace(go.Bar(
             y=[human_label], x=[human_assignable], orientation="h",
             marker_color="grey", name=human_label,
             text=[f"{human_assignable}"], textposition="outside",
+            cliponaxis=False, customdata=[_ts],
         ))
         fig.update_layout(
             title=f"{cat} ({len(cat_df)} tasks)",
-            height=120, margin=dict(l=100, r=30, t=30, b=10),
+            height=100, margin=dict(l=80, r=40, t=25, b=5),
             showlegend=False, barmode="group",
-            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
+                       range=[0, max_count * 1.5]),
             yaxis=dict(showgrid=False),
             plot_bgcolor="white", paper_bgcolor="white",
         )
@@ -1597,16 +1998,17 @@ def generate_category_overrides(data, config):
             dcc.Graph(
                 id={"type": "category-bar-chart", "category": cat},
                 figure=fig, config={"displayModeBar": False},
-                style={"height": "120px"},
+                style={"height": "100px"},
             ),
             dcc.Store(id={"type": "category-override", "category": cat}, data="default"),
             dcc.Store(id={"type": "category-counts", "category": cat},
                       data={"human": human_assignable, "auto": auto_assignable,
-                            "auto_label": auto_label}),
+                            "auto_label": auto_label,
+                            "title": f"{cat} ({len(cat_df)} tasks)"}),
         ], style={
-            "display": "inline-block", "width": "250px",
-            "verticalAlign": "top", "margin": "5px",
-            "border": "1px solid #eee", "borderRadius": "5px", "padding": "5px",
+            "display": "inline-block", "width": "220px",
+            "verticalAlign": "top", "margin": "4px",
+            "border": "1px solid #eee", "borderRadius": "5px", "padding": "3px",
         }))
 
     return {"display": "block"}, children
@@ -1646,21 +2048,29 @@ def toggle_category_selection(click_data, current_selection, counts):
     human_color = "dodgerblue" if new_selection == "human" else "grey"
     auto_color = "dodgerblue" if new_selection == "autonomous" else "grey"
 
+    auto_count = counts.get("auto", 0)
+    human_count = counts.get("human", 0)
+    max_count = max(auto_count, human_count, 1)
+    _ts = time.time()
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        y=[auto_label], x=[counts.get("auto", 0)], orientation="h",
+        y=[auto_label], x=[auto_count], orientation="h",
         marker_color=auto_color, name=auto_label,
-        text=[f"{counts.get('auto', 0)}"], textposition="outside",
+        text=[f"{auto_count}"], textposition="outside",
+        cliponaxis=False, customdata=[_ts],
     ))
     fig.add_trace(go.Bar(
-        y=["Human"], x=[counts.get("human", 0)], orientation="h",
+        y=["Human"], x=[human_count], orientation="h",
         marker_color=human_color, name="Human",
-        text=[f"{counts.get('human', 0)}"], textposition="outside",
+        text=[f"{human_count}"], textposition="outside",
+        cliponaxis=False, customdata=[_ts],
     ))
     fig.update_layout(
-        height=120, margin=dict(l=100, r=30, t=30, b=10),
+        title=counts.get("title", ""),
+        height=100, margin=dict(l=80, r=40, t=25, b=5),
         showlegend=False, barmode="group",
-        xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+        xaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
+                   range=[0, max_count * 1.5]),
         yaxis=dict(showgrid=False),
         plot_bgcolor="white", paper_bgcolor="white",
     )
