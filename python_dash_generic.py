@@ -515,7 +515,7 @@ def style_procedure_merge(df, config):
 # Columns always shown when present; everything else is hidden by default.
 # Agent columns from the config are also always shown.
 DEFAULT_VISIBLE_COLUMNS = {
-    "Row", "Procedure", "Class", "Type", "Category", "Task",
+    "Row", "Procedure", "Class", "Type", "Category", "Task", "Task Object",
     "Object", "Value",
     "Observability", "Predictability", "Directability",
     "TARS Performer Role", "TARS Supporter Role",
